@@ -1,0 +1,115 @@
+{
+ "source": "Liquipedia",
+ "logos": {
+  "100t": {
+   "light": "100t-light.png",
+   "dark": "100t-dark.png"
+  },
+  "1w": {
+   "light": "1w-light.png"
+  },
+  "9z": {
+   "light": "9z-light.png",
+   "dark": "9z-dark.png"
+  },
+  "astralis": {
+   "light": "astralis-light.png"
+  },
+  "aurora": {
+   "light": "aurora-light.png"
+  },
+  "bb team": {
+   "light": "bb-team-light.png"
+  },
+  "chinggis": {
+   "light": "chinggis-light.png"
+  },
+  "ef": {
+   "light": "ef-light.png"
+  },
+  "falcons": {
+   "light": "falcons-light.png",
+   "dark": "falcons-dark.png"
+  },
+  "faze": {
+   "light": "faze-light.png",
+   "dark": "faze-dark.png"
+  },
+  "fq": {
+   "light": "fq-light.png"
+  },
+  "furia": {
+   "light": "furia-light.png",
+   "dark": "furia-dark.png"
+  },
+  "fut": {
+   "light": "fut-light.png",
+   "dark": "fut-dark.png"
+  },
+  "g2": {
+   "light": "g2-light.png",
+   "dark": "g2-dark.png"
+  },
+  "gosh": {
+   "light": "gosh-light.png",
+   "dark": "gosh-dark.png"
+  },
+  "heroic": {
+   "light": "heroic-light.png",
+   "dark": "heroic-dark.png"
+  },
+  "imp": {
+   "light": "imp-light.png"
+  },
+  "legacy": {
+   "light": "legacy-light.png",
+   "dark": "legacy-dark.png"
+  },
+  "lvg": {
+   "light": "lvg-light.png"
+  },
+  "m80": {
+   "light": "m80-light.png"
+  },
+  "mibr": {
+   "light": "mibr-light.png",
+   "dark": "mibr-dark.png"
+  },
+  "mongolz": {
+   "light": "mongolz-light.png"
+  },
+  "mouz": {
+   "light": "mouz-light.png"
+  },
+  "navi": {
+   "light": "navi-light.png",
+   "dark": "navi-dark.png"
+  },
+  "nemiga": {
+   "light": "nemiga-light.png"
+  },
+  "nip": {
+   "light": "nip-light.png",
+   "dark": "nip-dark.png"
+  },
+  "pvision": {
+   "light": "pvision-light.png"
+  },
+  "spirit": {
+   "light": "spirit-light.png",
+   "dark": "spirit-dark.png"
+  },
+  "tl": {
+   "light": "tl-light.png",
+   "dark": "tl-dark.png"
+  },
+  "vit": {
+   "light": "vit-light.png",
+   "dark": "vit-dark.png"
+  },
+  "wildcard": {
+   "light": "wildcard-light.png",
+   "dark": "wildcard-dark.png"
+  }
+ }
+}
