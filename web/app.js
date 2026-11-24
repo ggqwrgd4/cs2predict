@@ -2515,6 +2515,22 @@
     function k(c) { c = normFor(st, c); return st === PO ? [c.qf.slice().sort(), c.sf.slice().sort(), c.champion || ''] : SLOT_KEYS.map(function (sl) { return c[sl].slice().sort(); }); }
     return JSON.stringify(k(a)) === JSON.stringify(k(b));
   }
+  /** Боти ліги: власна картка AI-аналізу і картка більшості експертів (лише Swiss-стадії). */
+  function lgBots() {
+    if (typeof Insights === 'undefined' || !state.insRaw) return [];
+    var ai = { uid: 'bot-ai', name: 'AI', bot: 'Картка нашого AI-аналізу', cards: {}, picks: {}, saved: {} },
+      ex = { uid: 'bot-exp', name: 'Експерти', bot: 'Картка більшості експертів', cards: {}, picks: {}, saved: {} };
+    STAGES.forEach(function (st) {
+      var field = {}, ids = stageTeams(st).map(function (t) { return t.id; });
+      ids.forEach(function (id) { field[id] = 1; });
+      var f = aiFileOf(st), c = f && f.ownCard ? Insights.cleanCard(f.ownCard, ids.length >= 16 ? field : null) : null;
+      if (c) { ai.cards[st] = c; ai.picks[st] = nPicks(c); }
+      var b = boardsOf(st), sum = b && ids.length >= 16 ? Insights.summarizeBoards(b, ids) : null, m = sum && sum.majority;
+      if (m && nPicks(m) === 10) { ex.cards[st] = m; ex.picks[st] = 10; }
+    });
+    return [ai, ex].filter(function (x) { return Object.keys(x.cards).length; });
+  }
+  function lgMembers(d) { return d ? d.members.concat(lgBots()) : []; }
   function lgMine(d) { return d && d.members.filter(function (m) { return m.me; })[0] || null; }
   function lgPicks(st, c) { c = normFor(st, c); return st === PO ? poPicks(c) : nPicks(c); }
   function lgTotal(st) { return st === PO ? 7 : 10; }
@@ -2652,7 +2668,7 @@
   function lgCards(st) {
     var out = {}, d = lgData();
     if (!d || st === PO) return out;
-    d.members.forEach(function (m) {
+    lgMembers(d).forEach(function (m) {
       var c = m.cards && m.cards[st];
       if (c && lgClosed(st)) { c = normCard(c); if (nPicks(c)) out[m.uid] = c; }
     });
@@ -2781,7 +2797,7 @@
     var st = lg.stage, started = lgClosed(st), total = lgTotal(st), probs = started && st !== PO;
     var cards = probs ? lgCards(st) : null, key = cards && Object.keys(cards).length >= 2 ? leagueKey(st, cards) : null;
     var L = state.league[st], res = L && L.res && L.key === key ? L.res : null, busy = !!key && !res && !(L && L.err && L.key === key);
-    var rows = d.members.map(function (m, i) {
+    var rows = lgMembers(d).map(function (m, i) {
       var c = m.cards && m.cards[st], n = (m.picks && m.picks[st]) || 0;
       return { m: m, c: c, n: n, sc: started && c ? lgScore(st, c) : null, x: res ? res.players[m.uid] : null, i: i };
     });
@@ -2796,18 +2812,19 @@
       var val = started ? (r.sc ? r.sc.hit : -1) : r.n;
       if (val !== prev) { pos = i + 1; prev = val; }
       var open = lg.open === r.m.uid, cell;
+      if (r.m.bot && !r.c) return '';
       if (started) cell = !r.sc || !r.sc.n ? '<span class="muted">не зберіг картку</span>' :
         '<span class="score"><span class="pts">' + r.sc.hit + '</span><span class="ok">✓ ' + r.sc.hit + '</span><span class="no">✗ ' + r.sc.dead + '</span>' + (r.sc.open ? '<span class="op">' + r.sc.open + ' у грі</span>' : '') + '</span>';
       else cell = !r.n ? '<span class="muted">ще не зберіг</span>' : r.n < total ? '<span class="muted">' + r.n + '/' + total + ' піків</span>' : '<span class="ready">' + ICON.check + 'картка готова</span>';
       var html = '<tr class="row' + (r.m.me ? ' me' : '') + (open ? ' open' : '') + '" data-lgrow="' + esc(r.m.uid) + '" tabindex="0" aria-expanded="' + open + '">' +
         '<td class="pos' + (pos === 1 && started && r.sc && r.sc.hit ? ' first' : '') + '">' + (started ? (r.sc && r.sc.n ? pos : '') : '') + '</td>' +
-        '<td><div class="who"><span class="av" style="background:' + PROFILE_COLORS[r.i % PROFILE_COLORS.length] + '">' + esc(initial(r.m.name)) + '</span><span class="nm">' + esc(r.m.name) + (r.m.me ? '<small>це ти</small>' : '') + '</span></div></td>' +
+        '<td><div class="who"><span class="av" style="background:' + PROFILE_COLORS[r.i % PROFILE_COLORS.length] + '">' + esc(initial(r.m.name)) + '</span><span class="nm">' + esc(r.m.name) + (r.m.me ? '<small>це ти</small>' : r.m.bot ? '<small>бот · ' + esc(r.m.bot) + '</small>' : '') + '</span></div></td>' +
         '<td>' + cell + '</td>';
       if (probs) html += '<td class="r hide-m">' + (r.x ? '<span class="big">' + fmtPct(r.x.p5) + '</span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>' +
         '<td class="r">' + (r.x ? '<span class="big">' + fmtPct(r.x.pFirst) + '</span><span class="bar"><i style="width:' + Math.min(100, r.x.pFirst * 100).toFixed(1) + '%"></i></span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>';
       html += '</tr>';
       if (open) {
-        var det = r.c && lgPicks(st, r.c) ? lgChips(st, r.c) : '<p class="hint">' + (!started && !r.m.me ? (r.n ? 'Картку друга покажемо, коли ' + esc(stageCfg(st).name) + ' почнеться — щоб ніхто не списував.' : 'Ще не зберіг картку.') : 'Картки немає.') + '</p>';
+        var det = r.c && lgPicks(st, r.c) && (started || r.m.me || r.m.bot) ? lgChips(st, r.c) : '<p class="hint">' + (!started && !r.m.me ? (r.n ? 'Картку друга покажемо, коли ' + esc(stageCfg(st).name) + ' почнеться — щоб ніхто не списував.' : 'Ще не зберіг картку.') : 'Картки немає.') + '</p>';
         var at = r.m.saved && r.m.saved[st] ? new Date(r.m.saved[st]) : null;
         html += '<tr class="det"><td colspan="' + cols + '">' + det + (at && !isNaN(at) ? '<p class="fine">Збережено ' + fmtWhen(at) + '</p>' : '') + '</td></tr>';
       }
@@ -2823,7 +2840,7 @@
   function lgTotalHTML(d) {
     var sts = LG_STAGES.filter(function (st) { return lgClosed(st); });
     if (!sts.length) return '';
-    var rows = d.members.map(function (m, i) {
+    var rows = lgMembers(d).map(function (m, i) {
       var per = sts.map(function (st) { var c = m.cards && m.cards[st]; return c ? lgScore(st, c).hit : null; });
       return { m: m, i: i, per: per, sum: per.reduce(function (a, b) { return a + (b || 0); }, 0) };
     }).sort(function (a, b) { return (b.sum - a.sum) || a.i - b.i; });
