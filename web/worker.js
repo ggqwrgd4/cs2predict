@@ -1,5 +1,6 @@
 /* Фоновий потік: симуляції, оптимізація, AI/експерти і плей-оф не блокують сторінку. */
-importScripts('engine.js', 'insights.js');
+var V = self.location.search || '';            // ?v=… — та сама версія, що й у сторінки
+importScripts('engine.js' + V, 'insights.js' + V);
 
 self.onmessage = function (e) {
   var d = e.data, t0 = Date.now();

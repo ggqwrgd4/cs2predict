@@ -107,6 +107,8 @@
   // Сторінка, зібрана scripts/build_site.py, працює без server.py: результати — з data/results.json
   // (його оновлює GitHub раз на 10 хв), AI й експерти — з data/insights.json, профілі й картки — у браузері.
   var STATIC = !!window.CS2P_STATIC;
+  // Версія збірки (scripts/build_site.py): після оновлення сайту браузер не змішує старі й нові файли.
+  var WORKER_URL = 'web/worker.js' + (window.CS2P_V ? '?v=' + encodeURIComponent(window.CS2P_V) : '');
   function staticApi(url, method, body) {
     var u = new URL(url, location.href), path = url.split('?')[0], q = u.searchParams;
     var store = lsJSON('cs2p-store') || { profiles: [{ id: 'me', name: 'Я' }], cards: {} };
@@ -450,9 +452,9 @@
 
   // ---------------------------------------------------------- розрахунки ---
   var runW = null, runJobs = 0, optW = null, optJobs = [], manyW = null, manyBusy = false;
-  function newRunWorker() { if (runW) runW.terminate(); runW = new Worker('web/worker.js'); runW.onmessage = onRun; runJobs = 0; }
-  function newOptWorker() { if (optW) optW.terminate(); optW = new Worker('web/worker.js'); optW.onmessage = onOpt; optJobs = []; }
-  function newManyWorker() { if (manyW) manyW.terminate(); manyW = new Worker('web/worker.js'); manyW.onmessage = onMany; manyBusy = false; }
+  function newRunWorker() { if (runW) runW.terminate(); runW = new Worker(WORKER_URL); runW.onmessage = onRun; runJobs = 0; }
+  function newOptWorker() { if (optW) optW.terminate(); optW = new Worker(WORKER_URL); optW.onmessage = onOpt; optJobs = []; }
+  function newManyWorker() { if (manyW) manyW.terminate(); manyW = new Worker(WORKER_URL); manyW.onmessage = onMany; manyBusy = false; }
 
   var runTimers = {};
   function scheduleRun(st) { clearTimeout(runTimers[st]); runTimers[st] = setTimeout(function () { requestRun(st); }, 120); }
@@ -1289,7 +1291,7 @@
 
   // ------------------------------------------------- AI-аналіз та експерти ---
   var insW = null, insBusy = null, insQueue = [], insTimer = null;
-  function newInsWorker() { if (insW) insW.terminate(); insW = new Worker('web/worker.js'); insW.onmessage = onInsights; insBusy = null; }
+  function newInsWorker() { if (insW) insW.terminate(); insW = new Worker(WORKER_URL); insW.onmessage = onInsights; insBusy = null; }
 
   function loadInsights() {
     return getJSON('/api/insights').then(function (j) { state.insRaw = j || {}; })
@@ -1544,7 +1546,7 @@
 
   // ---------------------------------------------------------------- плей-оф ---
   var poW = null, poTimer = null;
-  function newPoWorker() { if (poW) poW.terminate(); poW = new Worker('web/worker.js'); poW.onmessage = onPlayoffs; state.poBusy = false; }
+  function newPoWorker() { if (poW) poW.terminate(); poW = new Worker(WORKER_URL); poW.onmessage = onPlayoffs; state.poBusy = false; }
   function poKey(c) { return c.qf.slice().sort().join(',') + '|' + c.sf.slice().sort().join(',') + '|' + (c.champion || ''); }
   /** Матчі плей-оф з Liquipedia для рушія: пари й переможці (лише завершені). */
   function poResults() {
