@@ -227,7 +227,37 @@
     return { deadline: c.deadline ? parseDate(c.deadline) : null, lockAt: c.lockAt ? parseDate(c.lockAt) : null };
   }
   function isClosed(st) { var t = times(st); return !!t.lockAt && Date.now() >= t.lockAt.getTime(); }
-  function canEdit(st) { return !isClosed(st); }   // після старту стадії картку змінити не можна (і для змагань з друзями)
+  /** Свою картку можна міняти завжди (для тестів і щоб звірити з грою). Картку друга з посилання після старту стадії — ні. */
+  function canEdit(st) { return !(isClosed(st) && isLinked(state.profile)); }
+  function isLinked(pid) { var p = state.profiles.filter(function (x) { return x.id === pid; })[0]; return !!(p && p.uid && pid !== 'me'); }
+
+  // Картка для змагання з друзями: після старту стадії рахується та, що була до старту.
+  // Зміни після старту — лише для себе. Друзі з посилання й так присилають картку зі свого сайту.
+  var frozen = lsJSON('cs2p-frozen') || {};
+  function saveFrozen() { lsSet('cs2p-frozen', JSON.stringify(frozen)); }
+  function freezeCard(st, pid) { (frozen[pid] || (frozen[pid] = {}))[st] = rawCard(st, pid); saveFrozen(); }
+  /** Поки стадія не почалась — запам'ятовуємо картку; після старту фіксуємо те, що є (один раз). */
+  function syncFrozen() {
+    var changed = false;
+    state.profiles.forEach(function (p) {
+      if (isLinked(p.id)) return;
+      STAGES.concat([PO]).forEach(function (st) {
+        var f = frozen[p.id] && frozen[p.id][st];
+        if (!isClosed(st) || !f) { (frozen[p.id] || (frozen[p.id] = {}))[st] = rawCard(st, p.id); changed = true; }
+      });
+    });
+    if (changed) saveFrozen();
+  }
+  function leagueCard(st, pid) {
+    if (isLinked(pid) || !isClosed(st)) return rawCard(st, pid);
+    var f = frozen[pid] && frozen[pid][st];
+    return normFor(st, f || null);                 // профіль з'явився вже після старту — у змаганні картки немає
+  }
+  function leagueDiffers(st, pid) {
+    var a = leagueCard(st, pid), b = rawCard(st, pid);
+    return JSON.stringify(st === PO ? a : SLOT_KEYS.map(function (sl) { return a[sl].slice().sort(); })) !==
+      JSON.stringify(st === PO ? b : SLOT_KEYS.map(function (sl) { return b[sl].slice().sort(); }));
+  }
   function progress(st) {
     var s = state.live && state.live[st], ms = (s && s.matches) || [];
     return { done: ms.filter(function (m) { return m.finished; }).length, started: ms.some(function (m) { return m.a && m.b; }) };
@@ -575,7 +605,7 @@
   /** Картки всіх учасників на стадію (хто має хоч один пік). */
   function leagueCards(st) {
     var out = {};
-    state.profiles.forEach(function (p) { var c = normCard(cardOf(st, p.id)); if (nPicks(c)) out[p.id] = c; });
+    state.profiles.forEach(function (p) { var c = leagueCard(st, p.id); if (nPicks(c)) out[p.id] = c; });
     return out;
   }
   function leagueKey(st, cards) {
@@ -671,6 +701,7 @@
     setCard(st, st === PO ? poCard(pid) : cardOf(st, pid), pid);
     state.dirty[pk(st, pid)] = true;
     scheduleSave(st, pid);
+    if (!isClosed(st) && !isLinked(pid)) freezeCard(st, pid);
     if (st !== PO) requestLeague();
     if (st === PO) { if (pid === state.profile) schedulePlayoffs(); render(); return; }
     if (pid === state.profile && complete(cardOf(st))) { scheduleRun(st); scheduleInsights(st); }
@@ -2129,7 +2160,7 @@
   }
   function myName() { var n = state.me.n || profileName('me'); return n && n !== 'Я' ? n : ''; }
   function knownTeams() { var o = {}; Object.keys(teamIndex).forEach(function (id) { o[id] = 1; }); return o; }
-  function cardsOfProfile(pid) { var o = {}; STAGES.concat([PO]).forEach(function (st) { o[st] = rawCard(st, pid); }); return o; }
+  function cardsOfProfile(pid) { var o = {}; STAGES.concat([PO]).forEach(function (st) { o[st] = leagueCard(st, pid); }); return o; }
   function nameKey(n) { return String(n || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
   function shareBase() { return STATIC ? location.href.replace(/[?#].*$/, '') : PUBLIC_URL; }
   function inviteLinkOf(all) {
@@ -2290,14 +2321,14 @@
   function scoreOf(st, pid) {
     var cnt = { hit: 0, dead: 0, open: 0, n: 0 };
     if (st === PO) {
-      var c = poNorm(poCard(pid));
+      var c = leagueCard(PO, pid);
       c.qf.forEach(function (id) { cnt[poRealStatus('qf', id)]++; });
       c.sf.forEach(function (id) { cnt[poRealStatus('sf', id)]++; });
       if (c.champion) cnt[poRealStatus('champion', c.champion)]++;
       cnt.n = poPicks(c);
       return cnt;
     }
-    var k = normCard(cardOf(st, pid)), R = realRecords(st);
+    var k = leagueCard(st, pid), R = realRecords(st);
     SLOT_KEYS.forEach(function (sl) { k[sl].forEach(function (id) { cnt[realStatus(R, id, sl)]++; }); });
     cnt.n = nPicks(k);
     return cnt;
@@ -2313,7 +2344,7 @@
   function friendDetails(st, pid, cols) {
     var p = state.profiles.filter(function (x) { return x.id === pid; })[0], body;
     if (st === PO) {
-      var c = poNorm(poCard(pid));
+      var c = leagueCard(PO, pid);
       body = '<div class="groups">' + [['qf', 'У півфінал', c.qf], ['sf', 'У фінал', c.sf], ['champion', 'Чемпіон', c.champion ? [c.champion] : []]].map(function (g) {
         if (!g[2].length) return '';
         return '<div class="grp"><span class="gl">' + g[1] + '</span><div class="chips">' + g[2].map(function (id) {
@@ -2323,13 +2354,15 @@
       }).join('') + '</div>';
     } else {
       var R = realRecords(st);
-      body = chipsHTML(normCard(cardOf(st, pid)), null, function (id, sl) { var s = realStatus(R, id, sl); return s === 'open' ? null : s; });
+      body = chipsHTML(leagueCard(st, pid), null, function (id, sl) { var s = realStatus(R, id, sl); return s === 'open' ? null : s; });
     }
-    if (!picksIn(st, pid)) body = '<p class="hint">На ' + esc(stageCfg(st).name) + ' картки ще немає.' + (pid !== 'me' && p && p.uid ? ' Попроси надіслати нове посилання.' : '') + '</p>';
+    var lc = leagueCard(st, pid);
+    if (!(st === PO ? poPicks(lc) : nPicks(lc))) body = '<p class="hint">' + (isClosed(st) && picksIn(st, pid) && !isLinked(pid) ? 'До старту ' + esc(stageCfg(st).name) + ' картки не було — у змаганні вона не рахується.' : 'На ' + esc(stageCfg(st).name) + ' картки ще немає.') + (pid !== 'me' && p && p.uid ? ' Попроси надіслати нове посилання.' : '') + '</p>';
     var when = p && p.t ? new Date(p.t * 1000) : null;
     var acts = '<button class="btn sm" data-act="open-profile" data-id="' + esc(pid) + '">' + (pid === 'me' ? 'Відкрити мою картку' : 'Відкрити картку') + '</button>' +
       (pid !== 'me' ? '<button class="btn sm quiet" data-act="rename-friend" data-id="' + esc(pid) + '">Перейменувати</button>' +
         '<button class="btn sm quiet" data-act="delete-friend" data-id="' + esc(pid) + '">Видалити</button>' : '');
+    if (isClosed(st) && !isLinked(pid) && leagueDiffers(st, pid) && (st === PO ? poPicks(lc) : nPicks(lc))) body += '<p class="fine">Це картка до старту стадії. Зміни після старту бачиш лише ти — у змаганні вони не рахуються.</p>';
     return '<tr class="det"><td colspan="' + cols + '">' + body + (when && !isNaN(when) ? '<p class="fine">Посилання від ' + fmtWhen(when) + '</p>' : '') +
       '<div class="actions">' + acts + '</div></td></tr>';
   }
@@ -2373,7 +2406,8 @@
     }).join('');
     var hint = st === PO ? 'Плей-оф: 7 піків — 4 переможці чвертьфіналів, 2 фіналісти і чемпіон.'
       : (started ? 'Хто вгадав більше піків у ' + name + '. ' : 'Стадія ще не почалась — порівнюємо шанси карток. ') +
-        'Шанси — за ' + LEAGUE_SIMS.toLocaleString('uk-UA') + ' симуляціями, однаковими для всіх.' + (wiActive() ? ' Без твоїх припущень «що як».' : '');
+        'Шанси — за ' + LEAGUE_SIMS.toLocaleString('uk-UA') + ' симуляціями, однаковими для всіх.' + (wiActive() ? ' Без твоїх припущень «що як».' : '') +
+        (isClosed(st) ? ' Рахуються картки, збережені до старту стадії — зміни після старту лише для тебе.' : '');
     var note = probs && !key ? '<p class="fine">Шанси з\'являться, коли картки на ' + esc(name) + ' будуть хоча б у двох учасників.</p>'
       : L && L.err && L.key === key ? '<p class="fine">Помилка розрахунку: ' + esc(L.err) + '</p>' : '';
     var html = '<section class="card"><div class="card-h"><h2>Змагання · ' + esc(name) + '</h2>' + (busy ? '<span class="spinner" title="Рахую шанси"></span>' : '') +
@@ -2669,6 +2703,7 @@
     getJSON('/api/version').then(function (v) { state.version = v.version; }).catch(function () {});
     return loadProfiles();
   }).then(loadCards).then(function () {
+    syncFrozen();
     var saved = lsGet('stage');
     state.stage = saved && (state.cfg.stages[saved] || saved === PO) ? saved : 'stage1';
     render();
