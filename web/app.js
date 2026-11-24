@@ -616,7 +616,7 @@
     var st = lg.stage;
     if (!state.cfg || !state.live || !st || st === PO || state.view !== 'league') return false;
     var cards = leagueCards(st);
-    if (Object.keys(cards).length < 2) return false;
+    if (Object.keys(cards).length < 1) return false;
     var key = leagueKey(st, cards), L = state.league[st];
     if (L && L.key === key) return false;
     if (leagueBusy) newLeagueWorker();
@@ -2795,7 +2795,8 @@
   }
   function lgTableHTML(d) {
     var st = lg.stage, started = lgClosed(st), total = lgTotal(st), probs = started && st !== PO;
-    var cards = probs ? lgCards(st) : null, key = cards && Object.keys(cards).length >= 2 ? leagueKey(st, cards) : null;
+    var cards = probs ? lgCards(st) : null, key = cards && Object.keys(cards).length >= 1 ? leagueKey(st, cards) : null;
+    var solo = !cards || Object.keys(cards).length < 2;            // один гравець — «буде першим» не має сенсу
     var L = state.league[st], res = L && L.res && L.key === key ? L.res : null, busy = !!key && !res && !(L && L.err && L.key === key);
     var rows = lgMembers(d).map(function (m, i) {
       var c = m.cards && m.cards[st], n = (m.picks && m.picks[st]) || 0;
@@ -2821,7 +2822,7 @@
         '<td><div class="who"><span class="av" style="background:' + PROFILE_COLORS[r.i % PROFILE_COLORS.length] + '">' + esc(initial(r.m.name)) + '</span><span class="nm">' + esc(r.m.name) + (r.m.me ? '<small>це ти</small>' : r.m.bot ? '<small>бот · ' + esc(r.m.bot) + '</small>' : '') + '</span></div></td>' +
         '<td>' + cell + '</td>';
       if (probs) html += '<td class="r hide-m">' + (r.x ? '<span class="big">' + fmtPct(r.x.p5) + '</span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>' +
-        '<td class="r">' + (r.x ? '<span class="big">' + fmtPct(r.x.pFirst) + '</span><span class="bar"><i style="width:' + Math.min(100, r.x.pFirst * 100).toFixed(1) + '%"></i></span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>';
+        '<td class="r">' + (r.x && !solo ? '<span class="big">' + fmtPct(r.x.pFirst) + '</span><span class="bar"><i style="width:' + Math.min(100, r.x.pFirst * 100).toFixed(1) + '%"></i></span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>';
       html += '</tr>';
       if (open) {
         var det = r.c && lgPicks(st, r.c) && (started || r.m.me || r.m.bot) ? lgChips(st, r.c) : '<p class="hint">' + (!started && !r.m.me ? (r.n ? 'Картку друга покажемо, коли ' + esc(stageCfg(st).name) + ' почнеться — щоб ніхто не списував.' : 'Ще не зберіг картку.') : 'Картки немає.') + '</p>';
