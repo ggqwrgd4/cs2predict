@@ -1,0 +1,239 @@
+{
+ "_source": "Valve Global VRS 2026-11-02 (ValveSoftware/counter-strike_regional_standings); сіди й id команд — сторінки Liquipedia PGL/2026/Singapore/Stage 1–3; стендіни — PLAN.md §4 [одне джерело]",
+ "stages": {
+  "stage1": {
+   "name": "Stage 1",
+   "bo3Policy": "deciders",
+   "lockAt": "2026-11-24T06:00:00+02:00",
+   "teams": [
+    {
+     "id": "nip",
+     "name": "NIP",
+     "seed": 1,
+     "vrs": 1564
+    },
+    {
+     "id": "pvision",
+     "name": "PARIVISION",
+     "seed": 2,
+     "vrs": 1560
+    },
+    {
+     "id": "heroic",
+     "name": "HEROIC",
+     "seed": 3,
+     "vrs": 1548
+    },
+    {
+     "id": "faze",
+     "name": "FaZe",
+     "seed": 4,
+     "vrs": 1539
+    },
+    {
+     "id": "tl",
+     "name": "Liquid",
+     "seed": 5,
+     "vrs": 1528
+    },
+    {
+     "id": "ef",
+     "name": "Eternal Fire",
+     "seed": 6,
+     "vrs": 1513
+    },
+    {
+     "id": "100t",
+     "name": "100 Thieves",
+     "seed": 7,
+     "vrs": 1511
+    },
+    {
+     "id": "9z",
+     "name": "9z",
+     "seed": 8,
+     "vrs": 1490,
+     "adj": -0.1,
+     "note": "стендін history"
+    },
+    {
+     "id": "m80",
+     "name": "M80",
+     "seed": 9,
+     "vrs": 1489
+    },
+    {
+     "id": "dendele",
+     "name": "DENDELE",
+     "seed": 10,
+     "vrs": 1466
+    },
+    {
+     "id": "imp",
+     "name": "Imperial",
+     "seed": 11,
+     "vrs": 1406
+    },
+    {
+     "id": "wildcard",
+     "name": "Wildcard",
+     "seed": 12,
+     "vrs": 1391
+    },
+    {
+     "id": "gosh",
+     "name": "GOSH (BC.Game)",
+     "seed": 13,
+     "vrs": 1337
+    },
+    {
+     "id": "fq",
+     "name": "FlyQuest",
+     "seed": 14,
+     "vrs": 1318
+    },
+    {
+     "id": "chinggis",
+     "name": "Chinggis Warriors",
+     "seed": 15,
+     "vrs": 1272
+    },
+    {
+     "id": "lvg",
+     "name": "Lynn Vision",
+     "seed": 16,
+     "vrs": 1267
+    }
+   ],
+   "deadline": "2026-11-24T05:00:00+02:00"
+  },
+  "stage2": {
+   "name": "Stage 2",
+   "bo3Policy": "deciders",
+   "from": "stage1",
+   "lockAt": "2026-11-28T06:00:00+02:00",
+   "deadline": "2026-11-28T05:00:00+02:00",
+   "invited": [
+    {
+     "id": "fut",
+     "name": "FUT",
+     "seed": 1,
+     "vrs": 1721,
+     "adj": -0.1,
+     "note": "стендін SunPayus"
+    },
+    {
+     "id": "nemiga",
+     "name": "Nemiga",
+     "seed": 2,
+     "vrs": 1650
+    },
+    {
+     "id": "g2",
+     "name": "G2",
+     "seed": 3,
+     "vrs": 1616
+    },
+    {
+     "id": "1w",
+     "name": "THE ONE (1win)",
+     "seed": 4,
+     "vrs": 1598
+    },
+    {
+     "id": "navi",
+     "name": "NAVI",
+     "seed": 5,
+     "vrs": 1589
+    },
+    {
+     "id": "astralis",
+     "name": "Astralis",
+     "seed": 6,
+     "vrs": 1572,
+     "adj": -0.1,
+     "note": "стендін Anlelele"
+    },
+    {
+     "id": "mongolz",
+     "name": "The MongolZ",
+     "seed": 7,
+     "vrs": 1554
+    },
+    {
+     "id": "mibr",
+     "name": "MIBR",
+     "seed": 8,
+     "vrs": 1546
+    }
+   ]
+  },
+  "stage3": {
+   "name": "Stage 3",
+   "bo3Policy": "all",
+   "from": "stage2",
+   "lockAt": "2026-12-02T06:00:00+02:00",
+   "deadline": "2026-12-02T05:00:00+02:00",
+   "invited": [
+    {
+     "id": "mouz",
+     "name": "MOUZ",
+     "seed": 1,
+     "vrs": 1960
+    },
+    {
+     "id": "vit",
+     "name": "Vitality",
+     "seed": 2,
+     "vrs": 1922,
+     "adj": -0.1,
+     "note": "стендін apEX"
+    },
+    {
+     "id": "furia",
+     "name": "FURIA",
+     "seed": 3,
+     "vrs": 1912
+    },
+    {
+     "id": "aurora",
+     "name": "Aurora",
+     "seed": 4,
+     "vrs": 1860
+    },
+    {
+     "id": "spirit",
+     "name": "Spirit",
+     "seed": 5,
+     "vrs": 1842
+    },
+    {
+     "id": "bb team",
+     "name": "BB Team (BetBoom)",
+     "seed": 6,
+     "vrs": 1786
+    },
+    {
+     "id": "falcons",
+     "name": "Falcons",
+     "seed": 7,
+     "vrs": 1764
+    },
+    {
+     "id": "legacy",
+     "name": "Legacy",
+     "seed": 8,
+     "vrs": 1662,
+     "adj": -0.1,
+     "note": "стендін ksloks"
+    }
+   ]
+  },
+  "playoffs": {
+   "name": "Плей-оф",
+   "from": "stage3",
+   "lockAt": "2026-12-10T11:00:00+02:00",
+   "deadline": "2026-12-10T10:00:00+02:00"
+  }
+ }
+}
