@@ -181,9 +181,9 @@ button, input { font: inherit; color: inherit; }
 .box.win .box-label b { color: var(--win-ink); }
 .box.lose .box-label b { color: var(--lose-ink); }
 .slots { display: flex; gap: 12px; }
-.adv-label { display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 6px 0; text-align: center; flex: 1; min-width: 90px; }
-.adv-label b { font-size: 34px; font-weight: 800; color: var(--adv-ink); line-height: 1; letter-spacing: -.02em; }
-.adv-label span { font-size: 14px; color: var(--ink-2); }
+.pass-label { display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 6px 0; text-align: center; flex: 1; min-width: 90px; }
+.pass-label b { font-size: 34px; font-weight: 800; color: var(--adv-ink); line-height: 1; letter-spacing: -.02em; }
+.pass-label span { font-size: 14px; color: var(--ink-2); }
 
 .tcard { position: relative; width: 136px; min-height: 176px; border-radius: 14px; background: var(--surface); box-shadow: var(--card-shadow);
   border: 0; padding: 16px 8px 12px; display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: pointer; text-align: center; transition: transform .12s, box-shadow .12s; }
@@ -400,7 +400,7 @@ button, input { font: inherit; color: inherit; }
   .box.win, .box.lose { justify-content: space-between; }
   .gauge { order: -1; }
   .box.adv { flex-wrap: wrap; justify-content: center; }
-  .adv-label { order: -1; flex-basis: 100%; flex-direction: row; justify-content: center; gap: 18px; align-items: baseline; }
+  .pass-label { order: -1; flex-basis: 100%; flex-direction: row; justify-content: center; gap: 18px; align-items: baseline; }
   .dcols { gap: 6px; }
   .dv { font-size: 14px; }
   .dk { font-size: 13px; }
