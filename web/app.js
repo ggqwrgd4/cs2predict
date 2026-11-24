@@ -215,7 +215,7 @@
     return { deadline: c.deadline ? parseDate(c.deadline) : null, lockAt: c.lockAt ? parseDate(c.lockAt) : null };
   }
   function isClosed(st) { var t = times(st); return !!t.lockAt && Date.now() >= t.lockAt.getTime(); }
-  function canEdit(st) { return !isClosed(st) || !!state.editClosed[st]; }
+  function canEdit(st) { return true; }            // піки можна вносити й після закриття (щоб записати подану картку)
   function progress(st) {
     var s = state.live && state.live[st], ms = (s && s.matches) || [];
     return { done: ms.filter(function (m) { return m.finished; }).length, started: ms.some(function (m) { return m.a && m.b; }) };
@@ -846,8 +846,7 @@
   function renderTools() {
     var st = state.stage, closed = isClosed(st), edit = canEdit(st), html = '', n = picksIn(st);
     if (n) html += '<button class="tbtn" data-act="share" data-tip="Картинка або текст картки — щоб надіслати друзям">' + ICON.share + 'Поділитися</button>';
-    if (closed) html += '<button class="tbtn' + (state.editClosed[st] ? ' primary' : '') + '" data-act="edit-closed">' +
-      (state.editClosed[st] ? 'Готово' : picksIn(st) ? 'Виправити картку' : 'Внести картку') + '</button>';
+    if (n) html += '<button class="tbtn primary" data-act="save" data-tip="Зберегти картку (вона й так зберігається сама)">Зберегти</button>';
     if (edit && !closed && st !== PO) html += '<button class="tbtn" data-act="random" data-tip="Випадкова картка з команд цієї стадії">' + ICON.shuffle + 'Випадкова</button>';
     if (edit && (st !== PO || n)) html += '<button class="tbtn" data-act="reset" data-tip="' + (st === PO ? 'Прибрати всі піки плей-оф' : 'Очистити картку') + '">' + ICON.reset + 'Скинути</button>';
     $('tools').innerHTML = html;
@@ -2119,7 +2118,11 @@
     if (act === 'apply') return applyVariant(el.dataset.which);
     if (act === 'fill') return requestOpt(st, 'fill');
     if (act === 'variants') { state.showVariants = !state.showVariants; return keepFocus(renderRec); }
-    if (act === 'edit-closed') { state.editClosed[st] = !state.editClosed[st]; return render(); }
+    if (act === 'save') {
+      var k = pk(st, state.profile);
+      clearTimeout(saveTimers[k]); saveNow(st, state.profile);
+      return toast('Картку збережено' + (STATIC ? ' у цьому браузері' : '') + '.');
+    }
     if (act === 'random') return randomCard();
     if (act === 'reset') return resetCard();
     if (act === 'add-profile') return addProfile();
