@@ -1165,7 +1165,8 @@
   /** Вибір команди для слота: список відсортовано за шансом саме в цьому слоті. */
   function pickTeamFor(anchor, sl, idx) {
     var st = state.stage, c = cardOf(st), cur = c[sl][idx];
-    var teams = stageTeams(st).filter(function (t) { return t[sl] != null && (t.pIn == null || t.pIn > 0.001); })
+    // Команди, які вже стоять у картці (в іншому місці), у списку не показуємо — лише ту, що тут зараз.
+    var teams = stageTeams(st).filter(function (t) { return t[sl] != null && (t.pIn == null || t.pIn > 0.001) && (t.id === cur || !slotOf(c, t.id)); })
       .sort(function (a, b) { return b[sl] - a[sl]; });
     var html = '<h3>' + SLOT_NAMES[sl] + ' — обери команду</h3>' + teams.map(function (t) {
       var where = slotOf(c, t.id), note = t.id === cur ? 'зараз тут' : where ? 'зараз у ' + SLOT_NAMES[where] : (t.pIn != null && t.pIn < 0.999 ? 'у стадії ' + fmtPct(t.pIn) : '');
