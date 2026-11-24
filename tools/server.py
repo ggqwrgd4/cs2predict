@@ -9,7 +9,8 @@
 - POST /api/card?stage=stage1[&profile=<id>]             -> зберегти картку: «Я» — у data/my-cards.json,
   інші профілі — у data/profiles.json.
 - GET  /api/profiles                 -> список профілів [{id, name}] («Я» завжди перший).
-- POST /api/profiles {action: create|rename|delete, id?, name?} -> керування профілями.
+- POST /api/profiles {action: create|rename|delete|link, id?, name?, uid?, t?} -> керування профілями.
+  uid і t — друг зі змагання (доданий за посиланням): його id і час посилання; link прив'язує їх до наявного профілю.
   Зіпсований data/profiles.json сервер не перезаписує: GET /api/profiles віддає лише «Я» і поле "error",
   а все, що мало б змінити цей файл, отримує 503 з тим самим поясненням.
 - GET  /api/insights                 -> AI-аналіз (data/ai/) і борди експертів (data/analysts/) усіх стадій.
@@ -954,6 +955,17 @@ ME = "me"
 MAX_PROFILES = 12
 PROFILES_CORRUPT = "Файл data/profiles.json пошкоджено — виправ його або перейменуй; профілі друзів не змінено"
 _PROFILE_ID = re.compile(r"p[0-9a-f]{6}")
+# Змагання з друзями: друг, доданий за посиланням, має свій id (uid) і час посилання (t, секунди) —
+# нове посилання від нього оновлює той самий профіль, а не створює дубль.
+_UID = re.compile(r"[a-z0-9]{6,16}")
+
+
+def _valid_uid(uid):
+    return isinstance(uid, str) and bool(_UID.fullmatch(uid))
+
+
+def _valid_t(t):
+    return isinstance(t, (int, float)) and not isinstance(t, bool) and 0 <= t < 1e11
 
 
 def _profiles_path():
@@ -996,8 +1008,19 @@ def _load_profiles():
 
 def profile_list(store):
     me = store["names"].get(ME)
-    return [{"id": ME, "name": me if isinstance(me, str) and me else "Я"}] + \
-           [{"id": p["id"], "name": p["name"]} for p in _friends(store)]
+    out = [{"id": ME, "name": me if isinstance(me, str) and me else "Я"}]
+    for p in _friends(store):
+        item = {"id": p["id"], "name": p["name"]}
+        if _valid_uid(p.get("uid")):
+            item["uid"] = p["uid"]
+            if _valid_t(p.get("t")):
+                item["t"] = int(p["t"])
+        out.append(item)
+    return out
+
+
+def _uid_taken(store, uid, but=None):
+    return any(p.get("uid") == uid and p["id"] != but for p in _friends(store))
 
 
 # Невидимі символи з «видимих» категорій Unicode: заповнювачі хангиль і порожній знак Брайля.
@@ -1260,7 +1283,7 @@ class Handler(SimpleHTTPRequestHandler):
         return obj, False
 
     def _post_profiles(self):
-        """POST /api/profiles {action: create|rename|delete, id?, name?} -> {ok, profiles, profile?, version}."""
+        """POST /api/profiles {action: create|rename|delete|link, id?, name?, uid?, t?} -> {ok, profiles, profile?, version}."""
         if not self._same_site():
             return self._reject(FORBIDDEN, 403)
         req, done = self._json_body()
@@ -1279,8 +1302,35 @@ class Handler(SimpleHTTPRequestHandler):
                     return self._json({"error": "Забагато профілів (максимум %d)" % MAX_PROFILES}, 400)
                 if _name_taken(store, name):
                     return self._json({"error": "Профіль «%s» уже є" % name}, 409)
+                uid, t = req.get("uid"), req.get("t")
+                if uid is not None and not _valid_uid(uid):
+                    return self._json({"error": "Поганий id друга"}, 400)
+                if t is not None and not _valid_t(t):
+                    return self._json({"error": "Поганий час посилання"}, 400)
+                if uid is not None and _uid_taken(store, uid):
+                    return self._json({"error": "Цей друг уже є в змаганні"}, 409)
                 prof = {"id": _new_profile_id(store), "name": name}
+                if uid is not None:
+                    prof["uid"] = uid
+                    if t is not None:
+                        prof["t"] = int(t)
                 store["profiles"].append(prof)
+            elif action == "link":
+                # Прив'язати профіль друга до його посилання: {id, uid, t?}.
+                pid, uid, t = req.get("id"), req.get("uid"), req.get("t")
+                friend = next((p for p in _friends(store) if p["id"] == pid), None) if isinstance(pid, str) else None
+                if friend is None:
+                    return self._json({"error": "Невідомий профіль"}, 404)
+                if not _valid_uid(uid):
+                    return self._json({"error": "Поганий id друга"}, 400)
+                if t is not None and not _valid_t(t):
+                    return self._json({"error": "Поганий час посилання"}, 400)
+                if _uid_taken(store, uid, but=pid):
+                    return self._json({"error": "Цей друг уже є в змаганні"}, 409)
+                friend["uid"] = uid
+                if t is not None:
+                    friend["t"] = int(t)
+                prof = None
             elif action in ("rename", "delete"):
                 pid = req.get("id")
                 if not isinstance(pid, str) or not _profile_exists(store, pid):
