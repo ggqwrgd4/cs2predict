@@ -11,6 +11,7 @@ self.onmessage = function (e) {
       var M = self.Engine.buildMajor(d.cfg, d.live);
       if (d.type === 'optimize') res = self.Engine.optimize(M, d.stage, d.opts);
       else if (d.type === 'playoffs') res = self.Engine.runPlayoffs(M, d.card, d.opts);
+      else if (d.type === 'league') res = self.Engine.runLeague(M, d.stage, d.cards, d.opts);   // змагання з друзями
       else if (d.type === 'many') {
         // Шанс 5+ для кількох карток (профілів) — швидка оцінка для перемикача профілів.
         res = { results: {} };

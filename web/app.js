@@ -1,13 +1,18 @@
-/* cs2predict — сторінка у стилі референсу: блоки 3:0 / 0:3 / 3:1–3:2, кругова шкала шансу 5+,
- * 11 колонок розподілу, профілі (твоя картка, картка друга…), рекомендація, «що як» для найближчих матчів,
- * AI-аналіз і думка експертів (web/insights.js), вкладка плей-оф. */
+/* cs2predict — спрощена сторінка: вибір стадії і чотири розділи, з яких на екрані завжди лише один:
+ *   «Моя картка» (10 піків, шанс 5+, порада), «Друзі» (змагання за посиланням, web/league.js),
+ *   «Матчі» (за кого вболівати, «що як», результати), «Аналітика» (шанси команд, AI, експерти).
+ * Розрахунки — у фонових потоках по черзі: спершу твоя картка, потім (лише за потреби) порада, друзі, AI.
+ * Нічого не рахуємо для розділів, яких не видно, і поки вкладка браузера прихована. */
 (function () {
   'use strict';
 
   var STAGES = ['stage1', 'stage2', 'stage3'];
   var PO = 'playoffs', INS_ORDER = ['stage1', 'stage2', 'stage3', 'playoffs'];
   var PO_DEFAULT = { name: 'Плей-оф', lockAt: '2026-12-10T11:00:00+02:00', deadline: '2026-12-10T10:00:00+02:00' };
-  var SIMS = 100000, QUICK_SIMS = 20000, PROFILE_SIMS = 20000, INS_SIMS = 30000, PO_SIMS = 40000;
+  var SIMS = 50000, QUICK_SIMS = 10000, LEAGUE_SIMS = 50000, INS_SIMS = 30000, PO_SIMS = 40000;
+  // Посилання для друзів ведуть на загальнодоступний сайт (з локальної версії теж).
+  var PUBLIC_URL = 'https://ggqwrgd4.github.io/cs2predict/';
+  var VIEWS = ['card', 'friends', 'matches', 'stats'];
   var REFRESH_MS = 60 * 1000, POLL_MS = 30 * 1000, REFETCH_MS = 5000;
   var SLOTS = { p30: 2, adv: 6, p03: 2 }, SLOT_KEYS = ['p30', 'adv', 'p03'];
   var SLOT_NAMES = { p30: '3:0', adv: '3:1 / 3:2', p03: '0:3' };
@@ -35,6 +40,10 @@
     dots: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4" fill="currentColor"/><circle cx="8" cy="8" r="1.4" fill="currentColor"/><circle cx="12.5" cy="8" r="1.4" fill="currentColor"/></svg>',
     share: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 10V2.5M5.2 5.2 8 2.4l2.8 2.8M3.5 8.2v4.4c0 .5.4.9.9.9h7.2c.5 0 .9-.4.9-.9V8.2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     trophy: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M5 2.5h6v3.2a3 3 0 0 1-6 0zM5 3.5H3v1.2A2.3 2.3 0 0 0 5.2 7M11 3.5h2v1.2A2.3 2.3 0 0 1 10.8 7M8 8.7v2.3M5.5 13.5h5M6.3 11h3.4l.3 2.5H6z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round"/></svg>',
+    bulb: '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 1.8a4.2 4.2 0 0 0-2.5 7.6c.5.4.8.9.8 1.5v.4h3.4v-.4c0-.6.3-1.1.8-1.5A4.2 4.2 0 0 0 8 1.8zM6.4 13h3.2M6.9 14.6h2.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    wand: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2.5 13.5l7-7M8.6 4.4l1.6-1.6M11.6 7.4l1.6-1.6M11 2v1.6M14 5h-1.6M5.2 2.6l.4 1.2M2.6 5.2l1.2.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    users: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6 7.2a2.4 2.4 0 1 0 0-4.8 2.4 2.4 0 0 0 0 4.8zM1.8 13.6c.3-2.3 2-3.6 4.2-3.6s3.9 1.3 4.2 3.6M10.6 2.6a2.3 2.3 0 0 1 0 4.4M12 10.2c1.3.5 2 1.6 2.2 3.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    link: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6.6 9.4a2.8 2.8 0 0 0 4 0l2.2-2.2a2.8 2.8 0 0 0-4-4l-.8.8M9.4 6.6a2.8 2.8 0 0 0-4 0L3.2 8.8a2.8 2.8 0 0 0 4 4l.8-.8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
     spark: '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3.5l1.6 4.9 4.9 1.6-4.9 1.6L12 16.5l-1.6-4.9L5.5 10l4.9-1.6zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor"/></svg>'
   };
 
@@ -45,10 +54,13 @@
     res: {}, lastGood: {}, resStale: {}, runReq: {}, runPhase: {}, running: {}, runError: {},
     opt: {}, optStale: {}, optReq: {}, optBusy: {}, profP5: {},
     showVariants: false, showAllRoot: false, version: null, liveSig: '', stageSig: {}, changedStages: {}, dataGen: 0, optGen: {},
-    whatIf: {}, wiPairs: {},        // «що як»: {стадія: {раунд: {"a|b": переможець}}}; пари раундів, які рушій жеребкував сам
+    whatIf: {}, wiPairs: {}, fitWait: {}, applyBest: null,        // «що як»: {стадія: {раунд: {"a|b": переможець}}}; пари раундів, які рушій жеребкував сам
     insRaw: null, ins: {}, insStale: {}, insErr: {}, insReq: 0, fit: {}, flags: { ai: true, exp: true }, model: null,
     po: null, poReq: 0, poBusy: false, poStale: false, poErr: null, poAll: false,
-    runProf: {}, manyKeys: {}, optLock: {}, saveRetry: {}, profilesError: null, lastClosed: null
+    runProf: {}, optLock: {}, saveRetry: {}, profilesError: null, lastClosed: null,
+    view: 'card',                   // розділ: card | friends | matches | stats
+    league: {}, leagueOpen: null,   // змагання: {стадія: {res, key}}; чий рядок у таблиці розгорнуто
+    me: null                        // хто я для друзів: {u — id, n — ім'я}
   };
   var $ = function (id) { return document.getElementById(id); };
   var teamIndex = {}, seq = 0;
@@ -126,13 +138,21 @@
         if (!name || name.length > 24) return fail('ім\'я має бути від 1 до 24 символів');
         if (taken(name, body.action === 'rename' && p ? p.id : null)) return fail('профіль з таким ім\'ям уже є');
       }
+      var uidTaken = function (u, but) { return store.profiles.some(function (x) { return x.id !== but && x.uid === u; }); };
       if (body.action === 'create') {
         if (store.profiles.length >= 12) return fail('профілів не може бути більше 12');
-        var id = 'p' + Math.random().toString(16).slice(2, 8);
-        store.profiles.push({ id: id, name: name }); save();
-        return Promise.resolve({ ok: true, profile: { id: id, name: name }, profiles: store.profiles });
+        if (body.uid != null && (!League.UID.test(body.uid) || uidTaken(body.uid))) return fail('цей друг уже є в змаганні');
+        var id = 'p' + Math.random().toString(16).slice(2, 8), np = { id: id, name: name };
+        if (body.uid != null) { np.uid = body.uid; if (typeof body.t === 'number') np.t = Math.round(body.t); }
+        store.profiles.push(np); save();
+        return Promise.resolve({ ok: true, profile: np, profiles: store.profiles });
       }
       if (!p) return fail('профіль не знайдено');
+      if (body.action === 'link' && p.id !== 'me') {
+        if (!League.UID.test(body.uid || '') || uidTaken(body.uid, p.id)) return fail('цей друг уже є в змаганні');
+        p.uid = body.uid; if (typeof body.t === 'number') p.t = Math.round(body.t); save();
+        return Promise.resolve({ ok: true, profiles: store.profiles });
+      }
       if (body.action === 'rename') { p.name = name; save(); return Promise.resolve({ ok: true, profile: p, profiles: store.profiles }); }
       if (body.action === 'delete' && p.id !== 'me') {
         store.profiles = store.profiles.filter(function (x) { return x.id !== p.id; }); delete store.cards[p.id]; save();
@@ -426,7 +446,7 @@
   function onScenarioChanged() {
     STAGES.forEach(function (st) { state.resStale[st] = true; });
     state.profP5 = {};
-    if (state.stage !== PO) { requestRun(state.stage); scheduleProfileStats(); }
+    if (state.stage !== PO) { requestRun(state.stage); requestLeague(); }
     render();
   }
 
@@ -451,10 +471,26 @@
   }
 
   // ---------------------------------------------------------- розрахунки ---
-  var runW = null, runJobs = 0, optW = null, optJobs = [], manyW = null, manyBusy = false;
+  var runW = null, runJobs = 0, optW = null, optJobs = [], leagueW = null, leagueBusy = false;
   function newRunWorker() { if (runW) runW.terminate(); runW = new Worker(WORKER_URL); runW.onmessage = onRun; runJobs = 0; }
   function newOptWorker() { if (optW) optW.terminate(); optW = new Worker(WORKER_URL); optW.onmessage = onOpt; optJobs = []; }
-  function newManyWorker() { if (manyW) manyW.terminate(); manyW = new Worker(WORKER_URL); manyW.onmessage = onMany; manyBusy = false; }
+  function newLeagueWorker() { if (leagueW) leagueW.terminate(); leagueW = new Worker(WORKER_URL); leagueW.onmessage = onLeague; leagueBusy = false; }
+
+  // Черга фонових розрахунків: не більше одного одночасно, лише коли твоя картка вже порахована
+  // і вкладка браузера видима. Так сторінка не вантажить усі ядра процесора одразу.
+  var BG = { want: {}, active: null }, BG_ORDER = ['ins', 'opt', 'league'], BG_START = {};
+  function bgWant(kind) { BG.want[kind] = 1; setTimeout(bgPump, 0); }
+  function bgPump() {
+    if (BG.active || document.hidden || !state.live || !state.cfg || !state.stage) return;
+    if (state.stage !== PO && state.running[state.stage]) return;
+    for (var i = 0; i < BG_ORDER.length; i++) {
+      var k = BG_ORDER[i];
+      if (!BG.want[k]) continue;
+      delete BG.want[k];
+      if (BG_START[k]()) { BG.active = k; return; }
+    }
+  }
+  function bgDone(kind) { if (BG.active === kind) BG.active = null; setTimeout(bgPump, 0); }
 
   var runTimers = {};
   function scheduleRun(st) { clearTimeout(runTimers[st]); runTimers[st] = setTimeout(function () { requestRun(st); }, 120); }
@@ -481,7 +517,7 @@
     if (r.reqId !== state.runReq[r.stage]) return;
     if (r.meta === 'quick' && state.runPhase[r.stage] === 'full') return;
     state.runPhase[r.stage] = r.meta;
-    if (r.meta === 'full' || r.error) state.running[r.stage] = false;
+    if (r.meta === 'full' || r.error) { state.running[r.stage] = false; setTimeout(bgPump, 0); }
     if (r.error) state.runError[r.stage] = r.error;
     else {
       state.runError[r.stage] = null; state.res[r.stage] = r; state.resStale[r.stage] = false;
@@ -497,6 +533,7 @@
     if (optJobs.some(function (j) { return j.st !== st || j.key === key; })) {
       optJobs.forEach(function (j) { state.optBusy[j.key] = false; if (j.mode === 'best' && state.opt[j.st]) state.optStale[j.st] = true; });
       newOptWorker();
+      if (BG.active === 'opt' && mode !== 'best') { BG.active = null; bgWant('opt'); }
     }
     var id = ++seq;
     state.optReq[key] = id; state.optBusy[key] = true; state.optGen[key] = state.dataGen;
@@ -504,7 +541,7 @@
     optJobs.push({ st: st, key: key, mode: mode, profile: state.profile });
     optW.postMessage({ type: 'optimize', reqId: id, stage: st, tag: mode, meta: state.profile, cfg: modelCfg(), live: liveForWorker(false),
       opts: { locks: mode === 'fill' ? normCard(c) : emptyCard(), userCard: complete(c) ? normCard(c) : null } });
-    if (st === state.stage) keepFocus(function () { renderRec(); renderTools(); });
+    if (st === state.stage && state.view === 'card') keepFocus(function () { renderRec(); renderCardActions(); });
   }
 
   function onOpt(e) {
@@ -514,49 +551,81 @@
     state.optBusy[key] = false;
     if (r.tag === 'fill') {
       var where = (r.meta !== state.profile ? ' профілю «' + profileName(r.meta) + '»' : '') + (r.stage !== state.stage ? ' ' + stageCfg(r.stage).name : '');
+      bgDone('fill');
       if (r.error || !r.best) toast('Не вдалося доповнити картку' + where + (r.error ? ': ' + r.error : ''));
       else if (JSON.stringify(normCard(cardOf(r.stage, r.meta))) !== state.optLock[key]) toast('Картку' + where + ' змінено, поки я її доповнював. Натисни «Доповнити мою» ще раз.');
       else applyCard(r.stage, r.best.card, 'Картку' + where + ' доповнено · шанс 5+ ' + fmtPct(r.best.p5), r.meta);
     } else {
       // Якщо дані чи модель змінились, поки йшов підбір, результат уже застарів — рахуємо ще раз.
       state.opt[r.stage] = r; state.optStale[r.stage] = state.optGen[key] !== state.dataGen;
+      if (r.tag === 'best') bgDone('opt');
       if (state.optStale[r.stage] && r.stage === state.stage) ensureRec(r.stage);
+      // «Підібрати найкращу» натиснули, поки картка ще шукалась — застосовуємо, щойно знайшлась.
+      if (state.applyBest === r.stage + ':' + r.meta && !state.optStale[r.stage]) {
+        state.applyBest = null;
+        if (r.error || !r.best) toast('Не вдалося підібрати картку' + (r.error ? ': ' + r.error : ''));
+        else applyCard(r.stage, r.best.card, 'Найкраща картка · шанс 5+ ' + fmtPct(r.best.p5), r.meta);
+      }
     }
     if (r.stage === state.stage) render();
   }
 
+  /** Порада «можна краще» — у фоні, після розрахунку твоєї картки (лише для стадій, де картку ще можна подати). */
   function ensureRec(st) {
     if (!state.cfg || !state.live || st === PO || isClosed(st)) return;
-    if ((!state.opt[st] || state.optStale[st]) && !state.optBusy[st + ':best']) requestOpt(st, 'best');
+    if ((!state.opt[st] || state.optStale[st]) && !state.optBusy[st + ':best']) bgWant('opt');
+  }
+  BG_START.opt = function () {
+    var st = state.stage;
+    if (st === PO || isClosed(st) || state.optBusy[st + ':best'] || (state.opt[st] && !state.optStale[st])) return false;
+    requestOpt(st, 'best');
+    return true;
+  };
+  /** Кнопка «Підібрати найкращу» / «Доповнити картку». */
+  function bestCard() {
+    var st = state.stage, c = cardOf(st), o = state.opt[st];
+    if (nPicks(c) && !complete(c)) return requestOpt(st, 'fill');
+    if (o && o.best && !state.optStale[st] && !state.optBusy[st + ':best']) return applyCard(st, o.best.card, 'Найкраща картка · шанс 5+ ' + fmtPct(o.best.p5));
+    state.applyBest = st + ':' + state.profile;
+    if (!state.optBusy[st + ':best']) requestOpt(st, 'best');
+    render();
   }
 
-  var manyTimer = null;
-  function scheduleProfileStats() { clearTimeout(manyTimer); manyTimer = setTimeout(requestProfileStats, 400); }
-  function requestProfileStats() {
-    if (!state.live || !state.cfg || state.profiles.length < 2) return;
-    if (state.stage === PO) { keepFocus(renderProfiles); return; }
-    var st = state.stage, cards = {}, n = 0;
-    state.profiles.forEach(function (p) {
-      if (p.id === state.profile) return;                    // для поточного профілю є точний розрахунок
-      var c = cardOf(st, p.id);
-      if (complete(c)) { cards[p.id] = normCard(c); n++; }
-    });
-    if (!n) { keepFocus(renderProfiles); return; }
-    if (manyBusy) newManyWorker();
-    manyBusy = true;
-    var id = ++seq;
-    state.manyReq = id; state.manyKeys = {};
-    Object.keys(cards).forEach(function (pid) { state.manyKeys[pid] = cardKey(cards[pid]); });
-    manyW.postMessage({ type: 'many', reqId: id, stage: st, cfg: modelCfg(), live: liveForWorker(true), cards: cards, opts: { sims: PROFILE_SIMS } });
+  // --------------------------------------------------- змагання: розрахунок ---
+  /** Картки всіх учасників на стадію (хто має хоч один пік). */
+  function leagueCards(st) {
+    var out = {};
+    state.profiles.forEach(function (p) { var c = normCard(cardOf(st, p.id)); if (nPicks(c)) out[p.id] = c; });
+    return out;
   }
-  function onMany(e) {
+  function leagueKey(st, cards) {
+    modelCfg();
+    return hashStr(st + '#' + (state.stageSig[st] || '') + '#' + (state.stageSig[STAGES[STAGES.indexOf(st) - 1]] || '') + '#' +
+      state.model.key + '#' + JSON.stringify(cards));
+  }
+  function requestLeague() { if (state.view === 'friends' && state.stage !== PO) bgWant('league'); }
+  BG_START.league = function () {
+    var st = state.stage;
+    if (st === PO || state.view !== 'friends' || state.profiles.length < 2) return false;
+    var cards = leagueCards(st);
+    if (Object.keys(cards).length < 2) return false;
+    var key = leagueKey(st, cards), L = state.league[st];
+    if (L && L.key === key) return false;
+    if (leagueBusy) newLeagueWorker();
+    leagueBusy = true;
+    var id = ++seq;
+    state.leagueReq = id;
+    leagueW.postMessage({ type: 'league', reqId: id, stage: st, cfg: modelCfg(), live: liveForWorker(false), cards: cards, tag: key, opts: { sims: LEAGUE_SIMS } });
+    if (state.view === 'friends') keepFocus(renderFriends);
+    return true;
+  };
+  function onLeague(e) {
     var r = e.data;
-    if (r.reqId !== state.manyReq) return;
-    manyBusy = false;
-    if (r.error) return;
-    var bucket = state.profP5[r.stage] || (state.profP5[r.stage] = {});
-    Object.keys(r.results).forEach(function (pid) { bucket[pid] = { p5: r.results[pid].p5, key: state.manyKeys[pid] }; });
-    if (r.stage === state.stage) keepFocus(renderProfiles);
+    leagueBusy = false;
+    bgDone('league');
+    if (r.reqId !== state.leagueReq) return;
+    state.league[r.stage] = r.error ? { err: r.error, key: r.tag } : { res: r, key: r.tag };
+    if (r.stage === state.stage && state.view === 'friends') keepFocus(renderFriends);
   }
 
   function onDataChanged() {
@@ -569,7 +638,7 @@
     STAGES.forEach(function (st) { state.resStale[st] = true; if (state.opt[st]) state.optStale[st] = true; if (state.ins[st]) state.insStale[st] = true; });
     state.profP5 = {}; state.poStale = true;
     if (state.stage === PO) requestPlayoffs();
-    else { requestRun(state.stage); ensureRec(state.stage); scheduleProfileStats(); requestInsights(state.stage, true); }
+    else { requestRun(state.stage); ensureRec(state.stage); requestLeague(); requestInsights(state.stage, true); }
     render();
   }
 
@@ -622,7 +691,7 @@
     scheduleSave(st, pid);
     if (st === PO) { if (pid === state.profile) schedulePlayoffs(); render(); return; }
     if (pid === state.profile && complete(cardOf(st))) { scheduleRun(st); scheduleInsights(st); }
-    if (pid !== state.profile) scheduleProfileStats();
+    requestLeague();
     render();
   }
 
@@ -704,10 +773,10 @@
   }
 
   // ---------------------------------------------------------------- рендер ---
-  var FOCUS_ATTRS = ['data-tab', 'data-act', 'data-which', 'data-prof', 'data-slot', 'data-i', 'data-cell', 'data-wi', 'data-wa', 'data-wb', 'data-wr', 'data-po', 'data-flag', 'data-team', 'data-id'];
+  var FOCUS_ATTRS = ['data-view', 'data-lrow', 'data-tab', 'data-act', 'data-which', 'data-prof', 'data-slot', 'data-i', 'data-cell', 'data-wi', 'data-wa', 'data-wb', 'data-wr', 'data-po', 'data-flag', 'data-team', 'data-id'];
   function focusSelectors(el) {
     if (!el || el === document.body || !el.getAttribute) return [];
-    var full = el.tagName.toLowerCase() + (el.classList.contains('tcard') ? '.tcard' : el.classList.contains('pchip') ? '.pchip' : ''), loose = full;
+    var full = el.tagName.toLowerCase() + (el.classList.contains('tm') ? '.tm' : ''), loose = full;
     FOCUS_ATTRS.forEach(function (a) {
       var v = el.getAttribute(a);
       if (v == null) return;
@@ -733,11 +802,21 @@
   function renderAll() {
     if (!state.stage || !state.cfg) return;
     var po = state.stage === PO;
-    $('swissView').hidden = po; $('poView').hidden = !po;
-    renderTabs(); renderHead(); renderProfiles(); renderTools();
-    if (po) { renderPlayoffs(); renderSaveState(); return; }
-    renderPool(); renderBoard(); renderGauge(); renderDist();
-    renderSaveState(); renderRec(); renderNext(); renderInsights(); renderTeamsTable(); renderMatches();
+    if (po && state.view === 'matches') state.view = 'card';
+    renderTabs(); renderHead(); renderViews(); renderViewing();
+    VIEWS.forEach(function (v) { $('v-' + v).hidden = v !== state.view; });
+    $('swissCard').hidden = po; $('poCard').hidden = !po;
+    if (state.view === 'card') {
+      if (po) renderPlayoffs();
+      else { renderPick(); renderSummary(); renderCardActions(); renderRec(); }
+      renderSaveState();
+    } else if (state.view === 'friends') renderFriends();
+    else if (state.view === 'matches') { renderNext(); renderSim(); renderMatches(); }
+    else {
+      $('teamsCard').hidden = po;
+      if (po) $('insDuo').hidden = true;
+      else { renderTeamsTable(); renderInsights(); }
+    }
   }
 
   var lastTabs = '';
@@ -753,20 +832,43 @@
     var poLive = pp.done > 0 && pp.done < 7 || pp.live;
     html += '<button role="tab" aria-selected="' + (state.stage === PO) + '" data-tab="' + PO + '" data-tip="' +
       esc(poLive ? 'Йде плей-оф: зіграно ' + pp.done + ' з 7' : pp.done === 7 ? 'Плей-оф завершено' : known ? (poOpen ? 'Сітка відома — картку ще можна подати' : 'Картку плей-оф закрито')
-        : 'Прогноз сітки і шанси команд; справжня сітка — після Stage 3') + '">' +
+        : 'Шанси команд; сітка — після Stage 3') + '">' +
       (poLive ? '<span class="d live" aria-hidden="true"></span>' : poOpen ? '<span class="d open" aria-hidden="true"></span>' : '') + esc(stageCfg(PO).name) + '</button>';
     if (html === lastTabs) return;                 // без змін — не чіпаємо (і не збиваємо фокус)
     lastTabs = html;
     $('tabs').innerHTML = html;
   }
 
+  var lastViews = '';
+  function renderViews() {
+    var po = state.stage === PO, n = state.profiles.length;
+    var html = [['card', po ? 'Моя сітка' : 'Моя картка'], ['friends', 'Друзі'], ['matches', 'Матчі'], ['stats', 'Аналітика']]
+      .filter(function (x) { return !(po && x[0] === 'matches'); }).map(function (x) {
+        var badge = x[0] === 'friends' && n > 1 ? '<span class="badge">' + n + '</span>' : '';
+        return '<button role="tab" id="vt-' + x[0] + '" aria-selected="' + (state.view === x[0]) + '" aria-controls="v-' + x[0] + '" data-view="' + x[0] + '">' + x[1] + badge + '</button>';
+      }).join('');
+    if (html === lastViews) return;
+    lastViews = html;
+    $('views').innerHTML = html;
+  }
+
+  /** Відкрито картку друга — смужка з поверненням до своєї. */
+  function renderViewing() {
+    var el = $('viewing');
+    if (state.profile === 'me' || state.view !== 'card') { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = '<span class="av" style="background:' + profileColor(state.profile) + '">' + esc(initial(profileName(state.profile))) + '</span>' +
+      '<span class="grow">Це картка <b>' + esc(profileName(state.profile)) + '</b>. Зміни зберігаються в її профілі.</span>' +
+      '<button class="btn sm" data-act="back-me">← Моя картка</button>';
+  }
+
   function renderBanner() {
     var el = $('wiBanner'), n = wiCount();
     if (!n || state.stage === PO) { el.hidden = true; return; }
     el.hidden = false;
-    el.innerHTML = '<span class="wb-i" aria-hidden="true">?</span><span><b>Режим «що як».</b> Шанси на сторінці пораховано з ' + n + ' ' +
-      plural(n, 'твоїм припущенням', 'твоїми припущеннями', 'твоїми припущеннями') + ', а не лише з реальних результатів. ' +
-      'Рекомендація, AI та експерти рахуються за реальними даними.</span><button class="btn sm" data-act="wi-reset">Скинути</button>';
+    el.innerHTML = '<span class="grow"><b>Режим «що як».</b> Шанси пораховано з ' + n + ' ' +
+      plural(n, 'твоїм припущенням', 'твоїми припущеннями', 'твоїми припущеннями') + ' про матчі, а не лише з реальних результатів.</span>' +
+      '<button class="btn sm" data-act="wi-reset">Скинути</button>';
   }
 
   function renderHead() {
@@ -785,21 +887,14 @@
     else txt = 'Картку закрито';
     pill.className = cls; pill.hidden = false;
     pill.innerHTML = '<span class="pd" aria-hidden="true"></span>' + esc(txt);
-
-    var prevName = st === 'stage1' ? '' : stageCfg(STAGES[STAGES.indexOf(st) - 1]).name, sub;
-    if (st === 'stage1') sub = '16 команд · Swiss · Bo1, а матчі на вихід і виліт — Bo3';
-    else sub = '8 запрошених + 8 найкращих зі ' + prevName + (r && !r.fieldKnown ? ' — склад ще формується' : '') +
-      (st === 'stage3' ? ' · усі матчі Bo3' : ' · Bo1, вирішальні матчі — Bo3');
-    if (!isClosed(st)) sub += '. Перед подачею перевір, що Viewer Pass активний.';
+    var sub = st === 'stage1' ? '16 команд, Swiss. Обери 2 команди, що підуть 3:0, 2 — що підуть 0:3, і 6, що вийдуть далі. 5 вгаданих з 10 — монетка росте.'
+      : '8 запрошених + 8 найкращих зі ' + stageCfg(STAGES[STAGES.indexOf(st) - 1]).name + (r && !r.fieldKnown ? ' (хто саме — ще визначається)' : '') +
+        '. Вгадай 5 з 10 піків.';
     $('stageSub').textContent = sub;
 
     var alerts = [], lv = (state.live && state.live[st]) || {};
     if (state.profilesError) alerts.push(['critical', 'Профілі: ' + state.profilesError]);
     if (!state.live && state.meta.failed) alerts.push(['critical', STATIC ? 'Не вдалося завантажити результати матчів. Онови сторінку трохи згодом.' : 'Немає даних про матчі: сервер не відповідає. Перевір, що вікно start.command відкрите, і онови сторінку.']);
-    else if (state.meta.stale) {
-      var fd = parseDate(state.meta.fetchedAt);
-      alerts.push(['', 'Немає зв\'язку з Liquipedia' + (isNaN(fd) ? '' : ' — показуємо дані на ' + fmtWhen(fd) + ' (' + fmtAgo(Date.now() - fd.getTime()) + ')') + '. Сайт сам спробує ще раз.']);
-    }
     if (lv.error) alerts.push(['', 'Liquipedia: ' + lv.error]);
     (lv.manualErrors || []).forEach(function (m) { alerts.push(['', 'Ручне виправлення не застосовано: ' + m]); });
     if (r && r.derived && r.derived.live && r.derived.match === false) {
@@ -816,138 +911,87 @@
     }).join('');
   }
 
-  function profileChance(pid) {
-    var st = state.stage;
-    if (st === PO) return poPicks(poCard(pid)) + '/7';
-    var c = cardOf(st, pid);
-    if (!complete(c)) return nPicks(c) + '/10';
-    if (pid === state.profile) {
-      var r = state.res[st];
-      if (r && r.tag === cardKey(c)) return fmtPct(r.p5);
-    }
-    var b = state.profP5[st] && state.profP5[st][pid];
-    return b && b.key === cardKey(c) ? fmtPct(b.p5) : '…';
-  }
-
-  function renderProfiles() {
-    var html = state.profiles.map(function (p) {
-      var on = p.id === state.profile;
-      var btn = '<button class="prof' + (on ? ' on' : '') + '" data-prof="' + esc(p.id) + '" aria-pressed="' + on + '" data-tip="' +
-        esc('Профіль «' + p.name + '» · ' + (state.stage === PO ? 'піків у картці плей-оф' : 'шанс 5+ у ' + stageCfg(state.stage).name)) + '">' +
-        '<span class="av" style="background:' + profileColor(p.id) + '">' + esc(initial(p.name)) + '</span>' +
-        esc(p.name) + '<span class="pp">' + esc(profileChance(p.id)) + '</span></button>';
-      return on ? '<span class="profw">' + btn + '<button class="more" data-act="profile-menu" aria-label="' + esc('Дії з профілем «' + p.name + '»') +
-        '" data-tip="Перейменувати, скопіювати картку, видалити">' + ICON.dots + '</button></span>' : btn;
-    }).join('');
-    html += '<button class="prof add" data-act="add-profile" data-tip="Додати профіль — наприклад, картку друга">+ Профіль</button>';
-    $('profiles').innerHTML = html;
-  }
-
-  function renderTools() {
-    var st = state.stage, closed = isClosed(st), edit = canEdit(st), html = '', n = picksIn(st);
-    if (n) html += '<button class="tbtn" data-act="share" data-tip="Картинка або текст картки — щоб надіслати друзям">' + ICON.share + 'Поділитися</button>';
-    if (n) html += '<button class="tbtn primary" data-act="save" data-tip="Зберегти картку (вона й так зберігається сама)">Зберегти</button>';
-    if (edit && !closed && st !== PO) html += '<button class="tbtn" data-act="random" data-tip="Випадкова картка з команд цієї стадії">' + ICON.shuffle + 'Випадкова</button>';
-    if (edit && (st !== PO || n)) html += '<button class="tbtn" data-act="reset" data-tip="' + (st === PO ? 'Прибрати всі піки плей-оф' : 'Очистити картку') + '">' + ICON.reset + 'Скинути</button>';
-    $('tools').innerHTML = html;
-  }
-
-  function renderPool() {
-    var st = state.stage, c = cardOf(st), edit = canEdit(st), el = $('pool');
-    var teams = stageTeams(st).filter(function (t) { return t.pIn == null || t.pIn > 0.001; });
-    el.classList.toggle('ro', !edit);
-    el.innerHTML = teams.map(function (t) {
-      var used = !!slotOf(c, t.id);
-      var tip = t.name + (t.p30 != null ? ' · 3:0 ' + fmtPct(t.p30) + ' · 3:1/3:2 ' + fmtPct(t.adv) + ' · 0:3 ' + fmtPct(t.p03) : '') +
-        (t.pIn != null && t.pIn < 0.999 ? ' · у стадії ' + fmtPct(t.pIn) : '') + (used ? ' · уже в картці' : '');
-      return '<button class="pchip' + (used ? ' used' : '') + '" data-team="' + esc(t.id) + '"' + (edit ? ' draggable="true"' : '') +
-        ' data-tip="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + logoHTML(t.id, 44) + '</button>';
-    }).join('');
-  }
-
-  function slotCardHTML(sl, i, id, edit, r) {
+  // ------------------------------------------------------------ моя картка ---
+  var GROUPS = [['p30', '3:0', 'виграють усі три матчі'], ['p03', '0:3', 'програють усі три матчі'], ['adv', '3:1 / 3:2', 'вийдуть далі з однією-двома поразками']];
+  function tileHTML(sl, i, id, r) {
     if (!id) {
-      return '<button class="tcard empty' + (edit ? '' : ' ro') + '" data-slot="' + sl + '" data-i="' + i + '" aria-label="Порожнє місце в ' + SLOT_NAMES[sl] + '">' +
-        '<span class="plus" aria-hidden="true">+</span><span class="tn">' + (edit ? 'Обери' : 'Порожньо') + '</span></button>';
+      return '<button class="tm empty" data-slot="' + sl + '" data-i="' + i + '" aria-label="Обрати команду: ' + SLOT_NAMES[sl] + '">' +
+        '<span class="plus" aria-hidden="true">+</span>Обрати</button>';
     }
     var t = teamsById(r)[id], s = statusOf(id, sl, r), prob = t ? t[sl] : null;
-    var badge = s === 'hit' ? '<span class="st hit">' + ICON.check + 'зайшов</span>' : s === 'dead' ? '<span class="st dead">' + ICON.x + 'згорів</span>' : '';
-    var tip = teamName(id) + (prob != null ? ': шанс ' + SLOT_LONG[sl] + ' — ' + fmtPct1(prob) : '') + (s === 'hit' ? ' · пік зайшов' : s === 'dead' ? ' · пік згорів' : '') +
-      (edit ? ' · натисни, щоб замінити' : '');
-    return '<div class="tcard ' + s + (edit ? '' : ' ro') + '" role="button" tabindex="0" data-slot="' + sl + '" data-i="' + i + '" data-team="' + esc(id) + '"' +
-      (edit ? ' draggable="true"' : '') + ' data-tip="' + esc(tip) + '" aria-label="' + esc(tip) + '">' +
-      (edit ? '<button class="x" data-act="remove" data-id="' + esc(id) + '" aria-label="Прибрати ' + esc(teamName(id)) + '">' + ICON.xs + '</button>' : '') + badge +
-      '<span class="lg">' + logoHTML(id, 74) + '</span><span class="tn">' + esc(teamName(id)) + '</span>' +
-      (s === 'open' && prob != null ? '<span class="tp">' + fmtPct(prob) + '</span>' : '') + '</div>';
+    var sub = s === 'hit' ? '<span class="tp ok">✓ зайшов</span>' : s === 'dead' ? '<span class="tp no">✗ згорів</span>'
+      : '<span class="tp">' + (prob != null ? 'шанс ' + fmtPct(prob) : '…') + '</span>';
+    var tip = teamName(id) + (prob != null ? ': шанс ' + SLOT_LONG[sl] + ' — ' + fmtPct1(prob) : '') + (s === 'hit' ? ' · пік зайшов' : s === 'dead' ? ' · пік згорів' : '') + ' · натисни, щоб замінити';
+    return '<div class="tm ' + s + '" role="button" tabindex="0" data-slot="' + sl + '" data-i="' + i + '" data-team="' + esc(id) + '" draggable="true"' +
+      ' data-tip="' + esc(tip) + '" aria-label="' + esc(tip) + '"><span class="lg">' + logoHTML(id, 38) + '</span>' +
+      '<span class="tx"><span class="tn">' + esc(teamName(id)) + '</span>' + sub + '</span>' +
+      '<button class="x" data-act="remove" data-id="' + esc(id) + '" aria-label="Прибрати ' + esc(teamName(id)) + '">' + ICON.xs + '</button></div>';
+  }
+  function renderPick() {
+    var st = state.stage, c = cardOf(st), r = state.res[st];
+    $('pick').innerHTML = GROUPS.map(function (g) {
+      var sl = g[0], tiles = '';
+      for (var i = 0; i < SLOTS[sl]; i++) tiles += tileHTML(sl, i, c[sl][i], r);
+      return '<div class="sg ' + sl + '" data-drop="' + sl + '"><div class="sg-h"><b>' + g[1] + '</b><span>' + g[2] + '</span><em>' + c[sl].length + '/' + SLOTS[sl] + '</em></div>' +
+        '<div class="tms">' + tiles + '</div></div>';
+    }).join('');
   }
 
-  function renderBoard() {
-    var st = state.stage, c = cardOf(st), edit = canEdit(st), r = state.res[st];
-    function slotsHTML(sl, from, to) {
-      var out = '';
-      for (var i = from; i < to; i++) out += slotCardHTML(sl, i, c[sl][i], edit, r);
-      return out;
-    }
-    $('slots-p30').innerHTML = slotsHTML('p30', 0, 2);
-    $('slots-p03').innerHTML = slotsHTML('p03', 0, 2);
-    $('slots-adv-l').innerHTML = slotsHTML('adv', 0, 3);
-    $('slots-adv-r').innerHTML = slotsHTML('adv', 3, 6);
+  function ringSVG(p) {
+    var R = 42, C = 2 * Math.PI * R, v = Math.max(0, Math.min(1, p || 0)) * C;
+    return '<svg viewBox="0 0 96 96" aria-hidden="true"><circle class="rt" cx="48" cy="48" r="' + R + '" fill="none" stroke-width="9"/>' +
+      (v > 0 ? '<circle class="rv" cx="48" cy="48" r="' + R + '" fill="none" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + Math.max(0.1, v).toFixed(1) + ' ' + C.toFixed(1) + '"/>' : '') + '</svg>';
   }
-
-  function gaugeSVG(p) {
-    var R = 62, C = 2 * Math.PI * R, arc = C * 0.75, val = Math.max(0, Math.min(1, p || 0)) * arc;
-    return '<svg class="ring" viewBox="0 0 156 156" aria-hidden="true">' +
-      '<circle class="g-track" cx="78" cy="78" r="' + R + '" fill="none" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + arc.toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(135 78 78)"/>' +
-      (val > 0 ? '<circle class="g-val" cx="78" cy="78" r="' + R + '" fill="none" stroke-width="14" stroke-linecap="round" stroke-dasharray="' + Math.max(0.1, val).toFixed(1) + ' ' + C.toFixed(1) + '" transform="rotate(135 78 78)"/>' : '') +
-      '<circle class="g-core" cx="78" cy="78" r="40"/>' +
-      '<g class="g-icon" transform="translate(64 64) scale(1.17)"><path d="M12 3.5l1.6 4.9 4.9 1.6-4.9 1.6L12 16.5l-1.6-4.9L5.5 10l4.9-1.6zM18.5 15l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill="currentColor"/></g></svg>';
+  function pct1(p) { return p > 0 && p < 0.001 ? '<0.1%' : (p * 100).toFixed(1) + '%'; }
+  /** Скільки піків уже зайшло, згоріло і ще в грі. */
+  function liveCounts(st, c, r) {
+    var cnt = { hit: 0, dead: 0, open: 0 };
+    SLOT_KEYS.forEach(function (sl) { c[sl].forEach(function (id) { cnt[statusOf(id, sl, r)]++; }); });
+    return cnt;
   }
-
-  function renderGauge() {
-    var st = state.stage, c = cardOf(st), r = state.res[st], el = $('gauge');
+  function renderSummary() {
+    var st = state.stage, c = cardOf(st), r = state.res[st], el = $('summary');
     if (!complete(c)) {
       var n = nPicks(c);
-      el.className = 'gauge';
-      el.innerHTML = gaugeSVG(0) + '<div class="g-num">' + n + '/10</div><div class="g-lab">' + (n ? 'обери ще ' + (10 - n) : 'обери 10 команд') + '</div>';
+      el.className = 'panel summary';
+      el.innerHTML = '<div class="sum-top"><div class="ring">' + ringSVG(n / 10) + '<b>' + n + '/10</b></div><div class="sum-empty"><b>' +
+        (n ? 'Обери ще ' + (10 - n) : 'Обери 10 команд') + '</b>Натискай «+ Обрати» або «Підібрати найкращу» — і тут з\'явиться шанс, що зайде 5+.</div></div>';
       return;
     }
-    var fresh = r && r.tag === cardKey(c) && r.picks && r.picks.length === 10, R = fresh ? r : state.lastGood[st];
-    el.className = 'gauge' + (fresh ? '' : ' is-stale');
-    if (!R) { el.innerHTML = gaugeSVG(0) + '<div class="g-num">…</div><div class="g-lab">рахую</div>'; return; }
-    var html = gaugeSVG(R.p5) + '<div class="g-num" data-tip="' + esc(fmtPct1(R.p5) + ' ± ' + (1.96 * R.p5se * 100).toFixed(1) + ' п.п. — шум ' +
-      R.sims.toLocaleString('uk-UA') + ' симуляцій; сама модель помиляється більше. У середньому зайде ' + R.eK.toFixed(1) + ' з 10.') + '">' +
-      (R.p5 > 0 && R.p5 < 0.001 ? '<0.1%' : (R.p5 * 100).toFixed(1) + '%') + '</div><div class="g-lab">шанс 5+' + (wiActive() ? ' · що як' : '') + '</div>';
+    var fresh = r && r.tag === cardKey(c) && r.picks && r.picks.length === 10 && r.hist && r.hist.length === 11, R = fresh ? r : state.lastGood[st];
+    el.className = 'panel summary' + (fresh ? '' : ' is-stale');
+    if (!R) { el.innerHTML = '<div class="sum-top"><div class="ring">' + ringSVG(0) + '<b>…</b></div><div class="sum-l">Рахую шанс…</div></div>'; return; }
+    var tip = fmtPct1(R.p5) + ' ± ' + (1.96 * R.p5se * 100).toFixed(1) + ' п.п. — шум ' + R.sims.toLocaleString('uk-UA') + ' симуляцій; сама модель помиляється більше.';
+    var html = '<div class="sum-top"><div class="ring' + (R.p5 >= 0.5 ? ' good' : '') + '" data-tip="' + esc(tip) + '">' + ringSVG(R.p5) + '<b>' + pct1(R.p5) + '</b></div>' +
+      '<div><div class="sum-l">шанс, що зайде 5+ з 10' + (wiActive() ? ' (що як)' : '') + '</div><div class="sum-s">У середньому зайде ' + R.eK.toFixed(1).replace('.', ',') + ' з 10</div></div></div>';
     if (progress(st).started) {
-      var cnt = { hit: 0, dead: 0, open: 0 };
-      SLOT_KEYS.forEach(function (sl) { c[sl].forEach(function (id) { cnt[statusOf(id, sl, r)]++; }); });
-      html += '<div class="g-live"><span class="good" data-tip="Уже зайшло">' + ICON.check + '<i class="sr">зайшло </i>' + cnt.hit + '</span><span class="bad" data-tip="Уже згоріло">' + ICON.x + '<i class="sr">згоріло </i>' + cnt.dead +
-        '</span><span data-tip="Ще в грі">у грі ' + cnt.open + '</span></div>';
+      var cnt = liveCounts(st, c, R);
+      html += '<div class="sum-live"><span class="lv ok">✓ ' + cnt.hit + ' зайшло</span><span class="lv no">✗ ' + cnt.dead + ' згоріло</span><span class="lv">' + cnt.open + ' у грі</span></div>';
     }
+    var max = Math.max.apply(null, R.hist.concat([1e-9])), bars = '';
+    for (var k = 0; k <= 10; k++) {
+      var v = R.hist[k], h = v > 0 ? Math.max(3, Math.round(v / max * 46)) : 0;
+      bars += '<div class="hb' + (k >= 5 ? ' good' : '') + (h ? '' : ' zero') + '" data-tip="' + esc('Вгадати рівно ' + k + ' з 10: ' + fmtPct1(v)) + '"><i style="height:' + h + 'px"></i><span>' + k + '</span></div>';
+    }
+    html += '<div><div class="hist" role="img" aria-label="' + esc('Розподіл: ' + R.hist.map(function (v, k) { return k + ' з 10 — ' + fmtPct1(v); }).join(', ')) + '">' + bars + '</div></div>' +
+      '<div class="hist-cap"><span>скільки піків зайде</span><span>зелене — 5+</span></div>';
     el.innerHTML = html;
   }
 
-  function renderDist() {
-    var st = state.stage, c = cardOf(st), r = state.res[st], el = $('dcols');
-    var fresh = r && complete(c) && r.tag === cardKey(c) && r.hist && r.hist.length === 11, R = fresh ? r : complete(c) ? state.lastGood[st] : null;
-    if (!R) {
-      el.className = 'dcols';
-      el.innerHTML = '<div class="dempty">' + (complete(c) ? 'Рахую…' : 'Розподіл з\'явиться, коли в картці буде 10 команд') + '</div>';
-      return;
+  function renderCardActions() {
+    var st = state.stage, c = cardOf(st), n = nPicks(c), key = pk(st, state.profile), html = '';
+    var busy = state.applyBest === st + ':' + state.profile || state.optBusy[st + ':fill'];
+    if (!isClosed(st)) {
+      html += '<button class="btn primary" data-act="best"' + (busy ? ' disabled' : '') + '>' + ICON.wand +
+        (busy ? 'Підбираю…' : n && !complete(c) ? 'Доповнити картку' : 'Підібрати найкращу') + '</button>';
     }
-    el.className = 'dcols' + (fresh ? '' : ' is-stale');
-    var cnt = { hit: 0, dead: 0, open: 0 };
-    SLOT_KEYS.forEach(function (sl) { c[sl].forEach(function (id) { cnt[statusOf(id, sl, R)]++; }); });
-    var lo = cnt.hit, hi = cnt.hit + cnt.open;
-    function dv(v, k) { return v > 0 ? fmtPct1(v) : k >= lo && k <= hi ? '<0.1%' : '0%'; }   // 0 у симуляціях ≠ неможливо
-    var max = Math.max.apply(null, R.hist.concat([1e-9])), html = '';
-    for (var k = 10; k >= 0; k--) {
-      var v = R.hist[k], h = v > 0 ? Math.max(2, Math.round(v / max * 46)) : k >= lo && k <= hi ? 2 : 0;
-      html += '<div class="dc ' + (k >= 5 ? 'good' : 'bad') + '" data-tip="' + esc('Вгадати рівно ' + k + ' з 10: ' + dv(v, k) + (v === 0 && k >= lo && k <= hi ? ' (можливо, але рідко)' : '')) + '">' +
-        '<div class="dbox"><div class="dv">' + dv(v, k) + '</div><div class="dbar" style="height:' + h + 'px"></div></div>' +
-        '<div class="dk">' + k + '/10</div></div>';
+    if (n) {
+      var saved = !state.dirty[key] && !state.saving[key];
+      html += '<button class="btn' + (saved ? ' done' : '') + '" data-act="save">' + (saved ? ICON.check + 'Збережено' : 'Зберегти') + '</button>';
+      html += '<button class="btn" data-act="share">' + ICON.share + 'Поділитися</button>';
+      html += '<span class="grow"></span><button class="btn quiet" data-act="reset">' + ICON.reset + 'Очистити</button>';
     }
-    el.innerHTML = html + '<table class="sr"><caption>Скільки піків вгадаєш</caption>' +
-      R.hist.map(function (v, k) { return '<tr><td>' + k + ' з 10</td><td>' + dv(v, k) + '</td></tr>'; }).join('') + '</table>';
+    $('cardActions').innerHTML = html;
   }
 
   function saveText(st, pid) {
@@ -956,21 +1000,25 @@
     if (state.saveFailed[key]) return !state.profilesOk && pid !== 'me'
       ? 'Профілі ще не підтримуються сервером — перезапусти start.command' : 'Не вдалося зберегти на диск — копія лишилась у браузері, спробуємо ще раз';
     var d = parseDate(state.savedAt[key]);
-    return isNaN(d) ? '' : '<span class="ok">' + ICON.check + '</span>Збережено о ' + fmtWhen(d) + (state.profiles.length > 1 ? ' · профіль «' + esc(profileName(pid)) + '»' : '');
+    return isNaN(d) ? '' : '<span class="ok">' + ICON.check + '</span>Збережено ' + (STATIC ? 'в цьому браузері ' : '') + 'о ' + fmtWhen(d);
   }
   function renderSaveState() {
     if (!state.stage) return;
     var t = saveText(state.stage, state.profile), po = $('poSave');
     $('saveState').innerHTML = t;
     if (po) po.innerHTML = t;
+    if (state.view === 'card' && state.stage !== PO) keepFocus(renderCardActions);
   }
 
-  function chipsHTML(card, diffAgainst) {
+  /** Чипи команд по слотах; statusFn(id, sl) → 'hit' | 'dead' | null; diffAgainst — підсвітити піки, яких там немає. */
+  function chipsHTML(card, diffAgainst, statusFn) {
     return '<div class="groups">' + SLOT_KEYS.map(function (sl) {
-      return '<div class="grp"><span class="gl">' + SLOT_NAMES[sl] + '</span><div class="chips">' + card[sl].map(function (id) {
-        var diff = diffAgainst && diffAgainst[sl].indexOf(id) < 0;
-        return '<span class="chip' + (diff ? ' diff' : '') + '" data-tip="' + esc(teamName(id) + (diff ? ' · цього піку немає у твоїй картці' : '')) + '">' +
-          '<span class="cl">' + logoHTML(id, 20) + '</span>' + esc(teamName(id)) + '</span>';
+      if (!card[sl].length) return '';
+      return '<div class="grp"><span class="gl ' + sl + '">' + SLOT_NAMES[sl] + '</span><div class="chips">' + card[sl].map(function (id) {
+        var diff = diffAgainst && diffAgainst[sl].indexOf(id) < 0, s = statusFn ? statusFn(id, sl) : null;
+        return '<span class="chip' + (diff ? ' diff' : '') + (s === 'hit' || s === 'dead' ? ' ' + s : '') + '" data-tip="' +
+          esc(teamName(id) + (diff ? ' · цього піку немає у твоїй картці' : '') + (s === 'hit' ? ' · зайшов' : s === 'dead' ? ' · згорів' : '')) + '">' +
+          '<span class="cl">' + logoHTML(id, 20) + '</span>' + esc(teamName(id)) + (s === 'hit' ? ICON.check : s === 'dead' ? ICON.x : '') + '</span>';
       }).join('') + '</div></div>';
     }).join('') + '</div>';
   }
@@ -982,42 +1030,43 @@
     (o.alternatives || []).forEach(function (a, i) {
       rows.push(['alt' + i, 'Варіант ' + (i + 1), (a.risk ? RISK[a.risk] + ' · ' : '') + 'розкид ±' + a.sdK.toFixed(1).replace('.', ','), a]);
     });
-    // Не повторюємо картку, яка вже показана (наприклад, «макс. очікуваних» часто збігається з рекомендованою).
     var seen = {};
     seen[cardKey(normCard(o.best.card))] = 1;
     rows = rows.filter(function (x) { var k = cardKey(normCard(x[3].card)); if (seen[k]) return false; seen[k] = 1; return true; });
-    if (!rows.length) return '<p class="fine">Інших помітно відмінних варіантів немає — рекомендована картка найкраща і за середньою кількістю правильних.</p>';
+    if (!rows.length) return '<p class="fine">Інших помітно відмінних варіантів немає.</p>';
     return '<div class="variants">' + rows.map(function (x) {
       return '<div class="var"><span class="vn">' + esc(x[1]) + '<small>' + esc(x[2]) + '</small></span><span class="vp">' + fmtPct(x[3].p5) +
         '</span><button class="btn sm" data-act="apply" data-which="' + x[0] + '">Взяти</button></div>';
     }).join('') + '</div>';
   }
 
+  /** Порада: що саме змінити в картці, щоб підняти шанс 5+ (з'являється, лише коли є що покращити). */
   function renderRec() {
-    var st = state.stage, el = $('rec');
-    if (isClosed(st)) { el.hidden = true; return; }
+    var st = state.stage, el = $('rec'), c = cardOf(st), o = state.opt[st], mine = userP5(st);
+    if (isClosed(st) || !complete(c) || !o || o.error || !o.best || mine == null) { el.hidden = true; return; }
+    var b = o.best, bc = normCard(b.card), d = b.p5 - mine, stale = state.optStale[st] || state.optBusy[st + ':best'];
     el.hidden = false;
-    var o = state.opt[st], busy = state.optBusy[st + ':best'], c = cardOf(st), fillBusy = state.optBusy[st + ':fill'];
-    var html = '<div class="label">Рекомендація' + (state.profiles.length > 1 ? ' для «' + esc(profileName(state.profile)) + '»' : '') + '</div>';
-    if (!o) { el.innerHTML = html + '<div class="busy"><span class="spinner"></span>' + (state.live ? 'Підбираю картку з найбільшим шансом 5+…' : 'Чекаю на результати матчів…') + '</div>'; return; }
-    if (o.error) { el.innerHTML = html + '<p class="fine">Не вдалося підібрати: ' + esc(o.error) + '</p>'; return; }
-    var b = o.best, same = complete(c) && cardKey(c) === cardKey(normCard(b.card)), mine = userP5(st);
-    html += '<div class="' + (busy || state.optStale[st] ? 'is-stale' : '') + '">' +
-      '<div class="stat"><span class="stat-v">' + fmtPct(b.p5) + '</span><span class="stat-l">шанс, що зайде 5+</span></div>';
-    if (same) html += '<div class="delta">Твоя картка вже така</div>';
-    else if (mine != null) {
-      var d = b.p5 - mine;
-      html += '<div class="delta' + (d < 0.005 ? ' neutral' : '') + '">' + (d >= 0.005 ? fmtPP(d) + ' до твоєї картки' : 'Майже як твоя картка') + '</div>';
+    el.className = 'panel rec' + (stale ? ' is-stale' : '');
+    var more = '<button class="linkbtn" data-act="variants" aria-expanded="' + state.showVariants + '">' + (state.showVariants ? 'Сховати інші варіанти' : 'Інші варіанти') + '</button>' +
+      (state.showVariants ? variantsHTML(o) : '');
+    if (cardKey(c) === cardKey(bc) || d < 0.005) {
+      el.innerHTML = '<div class="label">' + ICON.check + 'Картка вже серед найкращих</div><p class="hint">Найкраще, що я знайшов, — ' + fmtPct1(b.p5) +
+        ' шанс 5+. Різниця менша за похибку.</p><div style="margin-top:10px">' + more + '</div>';
+      return;
     }
-    html += chipsHTML(normCard(b.card), nPicks(c) ? c : null) + '</div>';
-    var acts = (same ? '' : '<button class="btn primary" data-act="apply" data-which="best">Застосувати</button>') +
-      (nPicks(c) > 0 && !complete(c) ? '<button class="btn" data-act="fill"' + (fillBusy ? ' disabled' : '') + '>' + (fillBusy ? 'Доповнюю…' : 'Доповнити мою') + '</button>' : '');
-    if (acts) html += '<div class="actions">' + acts + '</div>';
-    html += '<div style="margin-top:12px"><button class="linkbtn" data-act="variants" aria-expanded="' + state.showVariants + '">' +
-      (state.showVariants ? 'Сховати інші варіанти' : 'Інші варіанти') + '</button></div>';
-    if (state.showVariants) html += variantsHTML(o);
-    html += '<p class="fine">' + (busy ? 'Дані оновились — перераховую…' : 'Перевірено на ' + o.evalSims.toLocaleString('uk-UA') + ' свіжих симуляціях') + '</p>';
-    el.innerHTML = html;
+    var items = '';
+    SLOT_KEYS.forEach(function (sl) {
+      var outs = c[sl].filter(function (id) { return bc[sl].indexOf(id) < 0; }), ins = bc[sl].filter(function (id) { return c[sl].indexOf(id) < 0; });
+      ins.forEach(function (id, i) {
+        items += '<li><span class="sl ' + sl + '">' + SLOT_NAMES[sl] + '</span><span class="in">' + esc(teamName(id)) + '</span>' +
+          (outs[i] ? '<span class="ar">замість</span><span class="out">' + esc(teamName(outs[i])) + '</span>' : '') + '</li>';
+      });
+    });
+    el.innerHTML = '<div class="label">' + ICON.bulb + 'Можна краще</div>' +
+      '<div class="rec-v">Шанс 5+ буде <b>' + fmtPct1(b.p5) + '</b> <span class="up">' + fmtPP(d) + '</span></div>' +
+      '<ul class="swaps">' + items + '</ul>' +
+      '<div class="actions"><button class="btn primary sm" data-act="apply" data-which="best">Застосувати</button></div>' +
+      '<div style="margin-top:10px">' + more + '</div>';
   }
 
   function wiBtn(st, round, a, b, team, on, sub) {
@@ -1038,14 +1087,17 @@
   function renderNext() {
     var st = state.stage, el = $('next'), r = state.res[st], c = cardOf(st), n = wiCount();
     var swing = (r && r.swing) || [];
-    if (!swing.length && !n) { el.hidden = true; return; }
-    el.hidden = false;
+    if (!swing.length && !n) {
+      el.innerHTML = '<div class="card-h"><h2>За кого вболівати</h2></div><p class="hint">' +
+        (r ? 'Найближчих матчів цієї стадії поки немає.' : 'Рахую…') + '</p>';
+      return;
+    }
     var fresh = !!r && r.reqId === state.runReq[st] && !state.resStale[st];
     var mine = !!r && complete(c) && r.tag === cardKey(c);
     var ss = r ? r.swingStage : null, rd = r ? r.swingRound : 0;
-    var html = '<div class="label">Найближчі матчі · що як</div>';
+    var html = '<div class="card-h"><h2>За кого вболівати</h2></div>';
     if (swing.length) {
-      html += '<p class="hint">' + esc((ss !== st ? stageCfg(ss).name + ', ' : '') + 'раунд ' + rd) + '. Натисни на команду — припустимо, що вона виграє, і шанси перерахуються.' +
+      html += '<p class="hint">' + esc((ss !== st ? stageCfg(ss).name + ', ' : '') + 'раунд ' + rd) + '. ▲ — перемога цієї команди найбільше допоможе твоїй картці. Натисни на команду, щоб припустити її перемогу («що як»).' +
         (r.swingDerived ? ' Пари ще не оголошені: це наше жеребкування за правилами Valve.' : '') + '</p>';
     }
     // Припущення з попередніх раундів і стадій — компактними мітками.
@@ -1120,7 +1172,9 @@
     var st = state.stage, s = (state.live && state.live[st]) || {}, ms = s.matches || [], p = progress(st);
     $('matchesHint').textContent = p.started ? 'зіграно ' + p.done + ' з 33' : 'стадія ще не почалась';
     if (!p.started) { $('matches').innerHTML = '<p class="fine">Пари з\'являться, коли стадія почнеться.</p>'; return; }
-    var html = '';
+    var html = '', c = cardOf(st), mine = {};
+    SLOT_KEYS.forEach(function (sl) { c[sl].forEach(function (id) { mine[id] = 1; }); });
+    $('matches').className = 'rounds';
     for (var rd = 1; rd <= 5; rd++) {
       var rm = ms.filter(function (m) { return m.round === rd; });
       html += '<div class="round"><h3>Раунд ' + rd + '</h3>' + rm.map(function (m) {
@@ -1129,7 +1183,7 @@
         var cA = m.finished ? (m.winner === m.a ? 'w' : 'l') : '', cB = m.finished ? (m.winner === m.b ? 'w' : 'l') : '';
         var when = parseDate(m.dateISO), whenTxt = !isNaN(when) ? fmtDay(when) : (m.date || '');
         var info = m.finished ? (m.walkover ? 'технічна перемога' : esc(score)) + (m.manual ? ' · вручну' : '') : score ? 'йде · ' + esc(score) : whenTxt ? esc(whenTxt) : 'не зіграно';
-        return '<div class="m"><span class="' + cA + '">' + esc(teamName(m.a)) + '</span> – <span class="' + cB + '">' + esc(teamName(m.b)) + '</span><span class="sc">' + info + '</span></div>';
+        return '<div class="m' + (mine[m.a] || mine[m.b] ? ' mine' : '') + '"><span class="' + cA + '">' + esc(teamName(m.a)) + '</span> – <span class="' + cB + '">' + esc(teamName(m.b)) + '</span><span class="sc">' + info + '</span></div>';
       }).join('') + '</div>';
     }
     $('matches').innerHTML = html;
@@ -1220,12 +1274,12 @@
     scheduleInsights(state.stage);
     var c = cardOf(state.stage), r = state.res[state.stage];
     if (complete(c) && (!r || r.tag !== cardKey(c))) requestRun(state.stage);
-    scheduleProfileStats();
+    requestLeague();
   }
 
   function addProfile() {
     if (!state.profilesOk) { toast('Профілі запрацюють після перезапуску сервера: закрий вікно start.command і відкрий його знову.'); return; }
-    openModal('<form><h3>Новий профіль</h3><p>Наприклад, картка друга. У кожного профілю свої картки на кожну стадію.</p>' +
+    openModal('<form><h3>Картка друга вручну</h3><p>Для друга, який не користується сайтом: внеси його піки сам. Він з\'явиться в змаганні.</p>' +
       '<input name="name" maxlength="24" placeholder="Ім\'я, наприклад Друг" autocomplete="off" required>' +
       '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn primary">Створити</button></div></form>',
     function (name) {
@@ -1235,8 +1289,8 @@
         state.profiles = j.profiles || state.profiles;
         closeModal();
         if (j.profile) switchProfile(j.profile.id);
+        switchView('card');
         toast('Профіль «' + ((j.profile && j.profile.name) || name) + '» створено. Заповни його картку.');   // сервер повертає очищене ім'я
-        render();
       }).catch(function (e) { toast('Не вдалося створити профіль: ' + e.message); });
     });
   }
@@ -1250,8 +1304,10 @@
       (p.id !== 'me' ? '<button class="pk" data-act="delete-profile"><span class="pl"></span><span class="pn">Видалити профіль</span><span></span></button>' : ''));
   }
 
-  function renameProfile() {
-    var p = state.profiles.filter(function (x) { return x.id === state.profile; })[0];
+  function renameProfile(pid) {
+    pid = typeof pid === 'string' ? pid : state.profile;
+    var p = state.profiles.filter(function (x) { return x.id === pid; })[0];
+    if (!p) return;
     closePicker();
     openModal('<form><h3>Перейменувати профіль</h3><input name="name" maxlength="24" value="' + esc(p.name) + '" autocomplete="off" required>' +
       '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn primary">Зберегти</button></div></form>',
@@ -1264,8 +1320,10 @@
     });
   }
 
-  function deleteProfile() {
-    var p = state.profiles.filter(function (x) { return x.id === state.profile; })[0];
+  function deleteProfile(pid) {
+    pid = typeof pid === 'string' ? pid : state.profile;
+    var p = state.profiles.filter(function (x) { return x.id === pid; })[0];
+    if (!p || p.id === 'me') return;
     closePicker();
     openModal('<form><h3>Видалити профіль «' + esc(p.name) + '»?</h3><p>Картки цього профілю на всіх стадіях буде видалено. Скасувати це не можна.</p>' +
       '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn danger">Видалити</button></div></form>',
@@ -1274,8 +1332,8 @@
         if (j.version) state.version = j.version;
         state.profiles = j.profiles || state.profiles.filter(function (x) { return x.id !== p.id; });
         delete state.cards[p.id];
-        closeModal(); switchProfile('me'); render();
-        toast('Профіль «' + p.name + '» видалено.');
+        closeModal(); if (state.profile === p.id) switchProfile('me'); state.leagueOpen = null; requestLeague(); render();
+        toast('«' + p.name + '» більше не в змаганні.');
       }).catch(function (e) { toast('Не вдалося видалити: ' + e.message); });
     });
   }
@@ -1287,6 +1345,350 @@
       return '<button class="pk" data-copy-from="' + esc(x.id) + '"><span class="pl"><span class="logo" style="background:' + profileColor(x.id) + ';font-size:12px">' +
         esc(initial(x.name)) + '</span></span><span class="pn">' + esc(x.name) + '<small>' + picksIn(st, x.id) + (st === PO ? '/7' : '/10') + ' піків</small></span><span></span></button>';
     }).join(''));
+  }
+
+
+  // ------------------------------------------------------- змагання з друзями ---
+  // Без сервера й реєстрації: кожен надсилає посилання зі своїми картками (web/league.js), друзі відкривають
+  // його — і отримують тебе окремим профілем. Нове посилання від того самого друга оновлює його картки.
+  function loadMe() {
+    var m = lsJSON('cs2p-me');
+    if (!m || typeof m.u !== 'string' || !League.UID.test(m.u)) m = { u: League.newUid(), n: '' };
+    if (typeof m.n !== 'string') m.n = '';
+    state.me = m;
+    lsSet('cs2p-me', JSON.stringify(m));
+  }
+  function myName() { var n = state.me.n || profileName('me'); return n && n !== 'Я' ? n : ''; }
+  function knownTeams() { var o = {}; Object.keys(teamIndex).forEach(function (id) { o[id] = 1; }); return o; }
+  function cardsOfProfile(pid) { var o = {}; STAGES.concat([PO]).forEach(function (st) { o[st] = rawCard(st, pid); }); return o; }
+  function nameKey(n) { return String(n || '').replace(/\s+/g, ' ').trim().toLowerCase(); }
+  function shareBase() { return STATIC ? location.href.replace(/[?#].*$/, '') : PUBLIC_URL; }
+  function inviteLinkOf(all) {
+    var members = [{ u: state.me.u, n: myName() || 'Друг', t: Date.now(), cards: cardsOfProfile('me') }];
+    if (all) state.profiles.forEach(function (p) {
+      if (p.id !== 'me' && p.uid) members.push({ u: p.uid, n: p.name, t: (p.t || 1) * 1000, cards: cardsOfProfile(p.id) });
+    });
+    return League.linkFor(shareBase(), League.encode(members));
+  }
+
+  var invite = { link: '' };
+  function inviteModal() {
+    var picks = STAGES.reduce(function (n, st) { return n + nPicks(cardOf(st, 'me')); }, 0) + poPicks(poCard('me'));
+    var linked = state.profiles.some(function (p) { return p.id !== 'me' && p.uid; });
+    openModal('<form><h3>Запросити друзів</h3><p>Надішли посилання в чат. Хто його відкриє, побачить твою картку в розділі «Друзі» — і зможе надіслати тобі свою.</p>' +
+      '<label class="label" for="meName" style="display:block;margin-bottom:6px">Твоє ім\'я для друзів</label>' +
+      '<input id="meName" maxlength="24" value="' + esc(myName()) + '" placeholder="Наприклад, Данило" autocomplete="nickname" style="margin-bottom:12px">' +
+      (linked ? '<label class="check"><input type="checkbox" id="inviteAll"> Додати картки всіх друзів — уся компанія одним посиланням</label>' : '') +
+      '<div class="linkbox"><input id="inviteLink" readonly aria-label="Посилання для друзів"></div>' +
+      (picks ? '' : '<p class="fine">У твоїй картці ще немає піків — друзі побачать тебе без карток. Заповниш — надішли посилання ще раз.</p>') +
+      '<p class="fine">Змінив картку — надішли посилання ще раз: воно оновить твою картку в друзів. Картки зберігаються лише в браузерах.</p>' +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Закрити</button>' +
+      '<button type="button" class="btn" data-act="native-link" id="nativeLink" hidden>Надіслати…</button>' +
+      '<button class="btn primary">' + ICON.link + 'Скопіювати посилання</button></div></form>', function () { copyInvite(); });
+    updateInvite();
+  }
+  function updateInvite() {
+    var nm = $('meName'), all = $('inviteAll'), box = $('inviteLink');
+    if (!box) return;
+    var n = nm ? League.cleanName(nm.value) || '' : myName();
+    if (n !== state.me.n) { state.me.n = n; lsSet('cs2p-me', JSON.stringify(state.me)); }
+    invite.link = inviteLinkOf(!!(all && all.checked));
+    box.value = invite.link;
+    var nb = $('nativeLink');
+    if (nb) nb.hidden = !navigator.share;
+  }
+  function copyInvite() {
+    updateInvite();
+    if (!myName()) { toast('Вкажи своє ім\'я — так друзі тебе впізнають.'); var nm = $('meName'); if (nm) nm.focus(); return; }
+    var box = $('inviteLink');
+    function manual() { if (box) { box.focus(); box.select(); } toast('Скопіюй посилання вручну: Cmd+C (на телефоні — довге натискання).'); }
+    if (!navigator.clipboard) return manual();
+    navigator.clipboard.writeText(invite.link).then(function () { toast('Посилання скопійовано — встав його в чат друзям.'); }).catch(manual);
+  }
+  function nativeInvite() {
+    updateInvite();
+    if (!myName()) { toast('Вкажи своє ім\'я — так друзі тебе впізнають.'); return; }
+    if (navigator.share) navigator.share({ title: 'cs2predict', text: 'Змагаймося в Pick\'Em PGL Major Singapore!', url: invite.link }).catch(function () { /* скасовано */ });
+  }
+
+  function addLinkModal() {
+    openModal('<form><h3>Додати друга за посиланням</h3><p>Встав посилання, яке надіслав друг (можна все повідомлення разом із ним).</p>' +
+      '<textarea id="joinText" placeholder="https://…#join=…" aria-label="Посилання від друга"></textarea>' +
+      '<div class="actions"><button type="button" class="btn quiet" data-act="add-profile">Внести картку вручну</button><span style="flex:1"></span>' +
+      '<button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn primary">Далі</button></div></form>',
+    function () {
+      var t = League.tokenFrom(($('joinText') || {}).value || '');
+      if (!t) { toast('Не бачу тут посилання з карткою — перевір, що скопійовано повністю.'); return; }
+      closeModal();
+      importToken(t);
+    });
+    var ta = $('joinText');
+    if (ta) ta.focus();
+  }
+
+  var pendingJoin = null;
+  /** Посилання від друга: показуємо, кого додамо чи оновимо, і чекаємо на підтвердження. */
+  function importToken(token) {
+    if (!state.cfg || !state.me) { pendingJoin = token; return; }
+    var d = League.decode(token, knownTeams());
+    if (d.error) { toast('Не вдалося відкрити посилання: ' + d.error + '.'); return; }
+    var items = [], self = false;
+    d.members.forEach(function (m) {
+      if (m.u === state.me.u) { self = true; return; }
+      var p = state.profiles.filter(function (x) { return x.id !== 'me' && x.uid === m.u; })[0] ||
+        state.profiles.filter(function (x) { return x.id !== 'me' && !x.uid && nameKey(x.name) === nameKey(m.n); })[0] || null;
+      items.push({ m: m, p: p, older: !!(p && p.t && m.t && m.t / 1000 < p.t) });
+    });
+    if (!items.length) { toast(self ? 'Це твоє власне посилання — надішли його друзям.' : 'У посиланні немає карток.'); return; }
+    var room = 12 - state.profiles.length, fresh = items.filter(function (x) { return !x.p; }).length;
+    function what(x) {
+      var sts = Object.keys(x.m.cards).map(function (st) { return stageCfg(st).name; });
+      return (x.older ? 'у тебе вже новіша версія — пропущу' : x.p ? 'оновлю картки' + (x.p.name !== x.m.n ? ' профілю «' + x.p.name + '»' : '') : 'новий учасник') +
+        ' · ' + (sts.length ? sts.join(', ') : 'поки без карток');
+    }
+    var all = items.every(function (x) { return x.p; });
+    openModal('<form><h3>' + (all ? 'Оновити картки друзів?' : 'Додати в змагання?') + '</h3><ul class="who-list">' + items.map(function (x, i) {
+      return '<li><span class="av" style="background:' + (x.p ? profileColor(x.p.id) : PROFILE_COLORS[(state.profiles.length + i) % PROFILE_COLORS.length]) + '">' +
+        esc(initial(x.m.n)) + '</span><b>' + esc(x.m.n) + '</b><small>' + esc(what(x)) + '</small></li>';
+    }).join('') + '</ul>' + (fresh > room ? '<p class="fine">Учасників може бути не більше 12 — частину не вдасться додати.</p>' : '') +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn primary">' + (all ? 'Оновити' : 'Додати') + '</button></div></form>',
+    function () { applyImport(items); });
+  }
+  function uniqueName(n) {
+    var taken = {};
+    state.profiles.forEach(function (p) { taken[nameKey(p.name)] = 1; });
+    if (!taken[nameKey(n)]) return n;
+    for (var i = 2; i < 100; i++) { var c = Array.from(n).slice(0, 21).join('').trim() + ' ' + i; if (!taken[nameKey(c)]) return c; }
+    return n;
+  }
+  function applyImport(items) {
+    var done = [], chain = Promise.resolve();
+    items.forEach(function (x) {
+      if (x.older) return;
+      chain = chain.then(function () {
+        var secs = Math.round((x.m.t || Date.now()) / 1000);
+        var req = x.p ? { action: 'link', id: x.p.id, uid: x.m.u, t: secs } : { action: 'create', name: uniqueName(x.m.n), uid: x.m.u, t: secs };
+        return postJSON('/api/profiles', req).then(function (j) {
+          if (j.version) state.version = j.version;
+          state.profiles = j.profiles || state.profiles;
+          var pid = x.p ? x.p.id : j.profile.id;
+          Object.keys(x.m.cards).forEach(function (st) { setCard(st, x.m.cards[st], pid); state.dirty[pk(st, pid)] = true; scheduleSave(st, pid); });
+          done.push(x.m.n);
+        }).catch(function (e) { toast('Не вдалося додати «' + x.m.n + '»: ' + e.message); });
+      });
+    });
+    chain.then(function () {
+      closeModal();
+      if (done.length) {
+        state.leagueOpen = null;
+        switchView('friends');
+        toast((done.length === 1 ? 'У змаганні: ' : 'У змаганні: ') + done.join(', ') + '. Надішли їм і своє посилання.');
+      } else render();
+    });
+  }
+
+  // Справжній стан піків друзів — за зіграними матчами (без «що як» і без симуляцій).
+  function realRecords(st) {
+    var s = (state.live && state.live[st]) || {}, rec = {}, field = null;
+    function r(id) { return rec[id] || (rec[id] = { w: 0, l: 0 }); }
+    (s.matches || []).forEach(function (m) {
+      if (!m.a || !m.b) return;
+      r(m.a); r(m.b);
+      if (m.finished && (m.winner === m.a || m.winner === m.b)) { r(m.winner).w++; r(m.winner === m.a ? m.b : m.a).l++; }
+    });
+    var seeds = (s.seeds || []).filter(function (x) { return x && x.id; });
+    if (seeds.length >= 16) { field = {}; seeds.forEach(function (x) { field[x.id] = 1; }); }
+    else if (Object.keys(rec).length >= 16) { field = {}; Object.keys(rec).forEach(function (id) { field[id] = 1; }); }
+    return { rec: rec, field: field };
+  }
+  function realStatus(R, id, sl) {
+    if (R.field && !R.field[id]) return 'dead';
+    var x = R.rec[id] || { w: 0, l: 0 };
+    return pickStatus(sl, x.w, x.l);
+  }
+  function poRealStatus(kind, id) {
+    var ms = ((state.live && state.live[PO]) || {}).matches || [];
+    function res(round) {
+      var m = ms.filter(function (x) { return x.round === round && x.finished && (x.a === id || x.b === id); })[0];
+      return m ? (m.winner === id ? 'w' : 'l') : null;
+    }
+    var q = res(1), s = res(2), f = res(3);
+    if (kind === 'qf') return q === 'w' ? 'hit' : q === 'l' ? 'dead' : 'open';
+    if (kind === 'sf') return q === 'l' || s === 'l' ? 'dead' : s === 'w' ? 'hit' : 'open';
+    return q === 'l' || s === 'l' || f === 'l' ? 'dead' : f === 'w' ? 'hit' : 'open';
+  }
+  /** Рахунок учасника на стадії: {hit, dead, open, n}. */
+  function scoreOf(st, pid) {
+    var cnt = { hit: 0, dead: 0, open: 0, n: 0 };
+    if (st === PO) {
+      var c = poNorm(poCard(pid));
+      c.qf.forEach(function (id) { cnt[poRealStatus('qf', id)]++; });
+      c.sf.forEach(function (id) { cnt[poRealStatus('sf', id)]++; });
+      if (c.champion) cnt[poRealStatus('champion', c.champion)]++;
+      cnt.n = poPicks(c);
+      return cnt;
+    }
+    var k = normCard(cardOf(st, pid)), R = realRecords(st);
+    SLOT_KEYS.forEach(function (sl) { k[sl].forEach(function (id) { cnt[realStatus(R, id, sl)]++; }); });
+    cnt.n = nPicks(k);
+    return cnt;
+  }
+  function stageStarted(st) { return st === PO ? poProgress().done > 0 || poProgress().live : progress(st).started; }
+
+  function avatarHTML(pid) { return '<span class="av" style="background:' + profileColor(pid) + '">' + esc(initial(profileName(pid))) + '</span>'; }
+  function scoreHTML(sc, started, total) {
+    if (!sc.n) return '<span class="muted">немає картки</span>';
+    if (!started) return sc.n < total ? '<span class="muted">' + sc.n + '/' + total + ' піків</span>' : '<span class="muted">картка готова</span>';
+    return '<span class="score"><span class="ok">✓ ' + sc.hit + '</span><span class="no">✗ ' + sc.dead + '</span>' + (sc.open ? '<span class="op">' + sc.open + ' у грі</span>' : '') + '</span>';
+  }
+  function friendDetails(st, pid, cols) {
+    var p = state.profiles.filter(function (x) { return x.id === pid; })[0], body;
+    if (st === PO) {
+      var c = poNorm(poCard(pid));
+      body = '<div class="groups">' + [['qf', 'У півфінал', c.qf], ['sf', 'У фінал', c.sf], ['champion', 'Чемпіон', c.champion ? [c.champion] : []]].map(function (g) {
+        if (!g[2].length) return '';
+        return '<div class="grp"><span class="gl">' + g[1] + '</span><div class="chips">' + g[2].map(function (id) {
+          var s = poRealStatus(g[0], id);
+          return '<span class="chip' + (s !== 'open' ? ' ' + s : '') + '"><span class="cl">' + logoHTML(id, 20) + '</span>' + esc(teamName(id)) + (s === 'hit' ? ICON.check : s === 'dead' ? ICON.x : '') + '</span>';
+        }).join('') + '</div></div>';
+      }).join('') + '</div>';
+    } else {
+      var R = realRecords(st);
+      body = chipsHTML(normCard(cardOf(st, pid)), null, function (id, sl) { var s = realStatus(R, id, sl); return s === 'open' ? null : s; });
+    }
+    if (!picksIn(st, pid)) body = '<p class="hint">На ' + esc(stageCfg(st).name) + ' картки ще немає.' + (pid !== 'me' && p && p.uid ? ' Попроси надіслати нове посилання.' : '') + '</p>';
+    var when = p && p.t ? new Date(p.t * 1000) : null;
+    var acts = '<button class="btn sm" data-act="open-profile" data-id="' + esc(pid) + '">' + (pid === 'me' ? 'Відкрити мою картку' : 'Відкрити картку') + '</button>' +
+      (pid !== 'me' ? '<button class="btn sm quiet" data-act="rename-friend" data-id="' + esc(pid) + '">Перейменувати</button>' +
+        '<button class="btn sm quiet" data-act="delete-friend" data-id="' + esc(pid) + '">Видалити</button>' : '');
+    return '<tr class="det"><td colspan="' + cols + '">' + body + (when && !isNaN(when) ? '<p class="fine">Посилання від ' + fmtWhen(when) + '</p>' : '') +
+      '<div class="actions">' + acts + '</div></td></tr>';
+  }
+
+  function renderFriends() {
+    var el = $('v-friends'), st = state.stage, name = stageCfg(st).name;
+    if (state.profiles.length < 2) {
+      el.innerHTML = '<section class="card"><div class="empty-state"><h2>Змагайся з друзями</h2>' +
+        '<p>Хто вгадає більше піків на мейджорі? Реєстрація не потрібна — картки передаються звичайним посиланням.</p>' +
+        '<ol class="steps"><li><b>Заповни картку</b> в розділі «Моя картка».</li><li><b>Надішли посилання</b> друзям у чат — кнопка нижче.</li>' +
+        '<li><b>Друзі відкривають його</b> й бачать тебе в таблиці. Хай надішлють свої посилання тобі.</li></ol>' +
+        '<div class="actions"><button class="btn primary" data-act="invite">' + ICON.users + 'Запросити друзів</button>' +
+        '<button class="btn" data-act="add-link">' + ICON.link + 'Додати за посиланням</button></div></div></section>';
+      return;
+    }
+    var started = stageStarted(st), total = st === PO ? 7 : 10, ids = state.profiles.map(function (p) { return p.id; });
+    var cards = st === PO ? null : leagueCards(st), key = cards && Object.keys(cards).length >= 2 ? leagueKey(st, cards) : null;
+    var L = state.league[st], res = L && L.res && L.key === key ? L.res : null, busy = !!key && !res && !(L && L.err && L.key === key);
+    var rows = ids.map(function (pid) { return { pid: pid, sc: scoreOf(st, pid), x: res ? res.players[pid] : null }; });
+    rows.sort(function (a, b) {
+      return (!!b.sc.n - !!a.sc.n) || (started ? b.sc.hit - a.sc.hit : 0) || ((b.x ? b.x.eK : 0) - (a.x ? a.x.eK : 0)) ||
+        (started ? a.sc.dead - b.sc.dead : 0) || ids.indexOf(a.pid) - ids.indexOf(b.pid);
+    });
+    var probs = st !== PO, cols = probs ? 5 : 3, pos = 0;
+    var head = '<thead><tr><th>#</th><th>Гравець</th><th>' + (started ? 'Вгадано' : 'Картка') + '</th>' +
+      (probs ? '<th class="r hide-m" data-tip="Шанс, що в картці зайде 5 або більше піків">Шанс 5+</th><th class="r" data-tip="Частка симуляцій, у яких ця картка вгадала найбільше (нічия ділиться)">Буде першим</th>' : '') + '</tr></thead>';
+    var body = rows.map(function (r, i) {
+      pos = i + 1;                                   // рівні за вгаданими — за очікуваною кількістю
+      var p = state.profiles.filter(function (x) { return x.id === r.pid; })[0], open = state.leagueOpen === r.pid, x = r.x;
+      var sub = r.pid === 'me' ? 'це ти' : p && p.uid ? 'за посиланням' : 'внесено вручну';
+      var html = '<tr class="row' + (r.pid === 'me' ? ' me' : '') + (open ? ' open' : '') + '" data-lrow="' + esc(r.pid) + '" tabindex="0" aria-expanded="' + open + '">' +
+        '<td class="pos' + (pos === 1 && r.sc.n && (started || x) ? ' first' : '') + '">' + (r.sc.n ? pos : '') + '</td>' +
+        '<td><div class="who">' + avatarHTML(r.pid) + '<span class="nm">' + esc(profileName(r.pid)) + '<small>' + sub + '</small></span></div></td>' +
+        '<td>' + scoreHTML(r.sc, started, total) + '</td>';
+      if (probs) {
+        html += '<td class="r hide-m">' + (!r.sc.n ? '' : x ? '<span class="big">' + fmtPct(x.p5) + '</span>' : busy ? '…' : '—') + '</td>' +
+          '<td class="r">' + (!r.sc.n ? '' : x ? '<span class="big">' + fmtPct(x.pFirst) + '</span><span class="bar"><i style="width:' + Math.min(100, x.pFirst * 100).toFixed(1) + '%"></i></span>' : busy ? '…' : '—') + '</td>';
+      }
+      return html + '</tr>' + (open ? friendDetails(st, r.pid, cols) : '');
+    }).join('');
+    var hint = st === PO ? 'Плей-оф: 7 піків — 4 переможці чвертьфіналів, 2 фіналісти і чемпіон.'
+      : (started ? 'Хто вгадав більше піків у ' + name + '. ' : 'Стадія ще не почалась — порівнюємо шанси карток. ') +
+        'Шанси — за ' + LEAGUE_SIMS.toLocaleString('uk-UA') + ' симуляціями, однаковими для всіх.' + (wiActive() ? ' Без твоїх припущень «що як».' : '');
+    var note = probs && !key ? '<p class="fine">Шанси з\'являться, коли картки на ' + esc(name) + ' будуть хоча б у двох учасників.</p>'
+      : L && L.err && L.key === key ? '<p class="fine">Помилка розрахунку: ' + esc(L.err) + '</p>' : '';
+    var html = '<section class="card"><div class="card-h"><h2>Змагання · ' + esc(name) + '</h2>' + (busy ? '<span class="spinner" title="Рахую шанси"></span>' : '') +
+      '<button class="btn" data-act="add-link">' + ICON.link + 'Додати за посиланням</button><button class="btn primary" data-act="invite">' + ICON.users + 'Запросити</button></div>' +
+      '<p class="hint">' + esc(hint) + ' Натисни на рядок, щоб побачити піки.</p>' +
+      '<div class="table-wrap"><table class="lb' + (busy ? ' is-stale' : '') + '"><caption class="sr">Змагання з друзями, ' + esc(name) + '</caption>' + head + '<tbody>' + body + '</tbody></table></div>' + note + '</section>';
+    html += totalsHTML();
+    el.innerHTML = html;
+  }
+
+  /** Загальний залік мейджора: вгадані піки на кожній стадії й монетки (5+). */
+  function totalsHTML() {
+    var sts = STAGES.concat([PO]).filter(stageStarted);
+    if (!sts.length) return '';
+    var rows = state.profiles.map(function (p) {
+      var cells = sts.map(function (st) { var sc = scoreOf(st, p.id); return sc.n ? sc : null; });
+      var tot = cells.reduce(function (n, c) { return n + (c ? c.hit : 0); }, 0);
+      var coins = sts.reduce(function (n, st, i) { return n + (st !== PO && cells[i] && cells[i].hit >= 5 ? 1 : 0); }, 0);
+      return { pid: p.id, cells: cells, tot: tot, coins: coins };
+    }).sort(function (a, b) { return (b.tot - a.tot) || (b.coins - a.coins); });
+    return '<section class="card tot"><div class="card-h"><h2>Загальний залік</h2></div><p class="hint">Скільки піків уже вгадано на кожній стадії. ' +
+      '<span class="coin" aria-hidden="true">5</span> — уже 5+ на стадії (монетка Pick\'Em росте).</p>' +
+      '<div class="table-wrap"><table class="lb"><thead><tr><th>Гравець</th>' + sts.map(function (st) { return '<th class="r">' + esc(stageCfg(st).name) + '</th>'; }).join('') +
+      '<th class="r">Разом</th></tr></thead><tbody>' + rows.map(function (r) {
+        return '<tr' + (r.pid === 'me' ? ' class="me"' : '') + '><td><div class="who">' + avatarHTML(r.pid) + '<span class="nm">' + esc(profileName(r.pid)) + '</span></div></td>' +
+          r.cells.map(function (c, i) {
+            return '<td class="r cell">' + (c ? c.hit + '<small>/' + (sts[i] === PO ? 7 : 10) + '</small>' + (sts[i] !== PO && c.hit >= 5 ? '<span class="coin" title="5+">5</span>' : '') : '<span class="muted">—</span>') + '</td>';
+          }).join('') + '<td class="r"><span class="big">' + r.tot + '</span></td></tr>';
+      }).join('') + '</tbody></table></div></section>';
+  }
+
+  function switchView(v) {
+    if (VIEWS.indexOf(v) < 0) return;
+    if (v === 'matches' && state.stage === PO) v = 'card';
+    var was = state.view;
+    state.view = v; lsSet('view', v);
+    closePicker();
+    render();
+    if (v !== was) window.scrollTo({ top: 0 });
+    if (v === 'friends') requestLeague();
+    if (v === 'stats' && state.stage !== PO) {
+      var st = state.stage, x = state.ins[st], c = cardOf(st);
+      if (hasInsights(st) && (!x || x.fitOnly || state.insStale[st] || x.meta !== state.profile || x.tag !== (complete(c) ? cardKey(c) : ''))) requestInsights(st, true);
+    }
+  }
+
+  // ------------------------------------------------ симулятор стадії (web/sim.js) ---
+  var simReady = false;
+  function loadAsset(src, css) {
+    return new Promise(function (res, rej) {
+      var v = window.CS2P_V ? '?v=' + encodeURIComponent(window.CS2P_V) : '', n;
+      if (css) { n = document.createElement('link'); n.rel = 'stylesheet'; n.href = src + v; }
+      else { n = document.createElement('script'); n.src = src + v; }
+      n.onload = res; n.onerror = rej; document.head.appendChild(n);
+    });
+  }
+  loadAsset('web/sim.css', true).catch(function () {});
+  (window.Engine ? Promise.resolve() : loadAsset('web/engine.js')).then(function () { return loadAsset('web/sim.js'); })
+    .then(function () { simReady = true; if (state.stage) render(); }).catch(function () {});
+  /** Припущення симулятора: winners {"a|b": id | null}; пари раунду, якого ще немає на Liquipedia, запам'ятовуємо. */
+  function simSet(st, round, pairs, winners) {
+    var wi = state.whatIf[st] || (state.whatIf[st] = {}), as = wi[round] || (wi[round] = {});
+    if (!liveMatches(st).some(function (m) { return m.round === round; })) (state.wiPairs[st] || (state.wiPairs[st] = {}))[round] = pairs;
+    Object.keys(winners).forEach(function (k) { if (winners[k]) as[k] = winners[k]; else delete as[k]; });
+    if (!Object.keys(as).length) { delete wi[round]; if (state.wiPairs[st]) delete state.wiPairs[st][round]; }
+  }
+  function renderSim() {
+    var st = state.stage, el = document.getElementById('simCard');
+    if (!el) {
+      var nx = document.getElementById('next');
+      if (!nx) return;
+      el = document.createElement('section'); el.id = 'simCard'; el.className = 'card sim-card';
+      nx.parentNode.insertBefore(el, nx);
+    }
+    if (st === PO || !simReady || !window.SwissSim || !state.cfg || !state.live) { el.hidden = true; return; }
+    var c = cardOf(st), r = state.res[st];
+    window.SwissSim.render(el, {
+      stage: st, cfg: state.cfg,
+      live: function () { return liveForWorker(true); }, realLive: function () { return liveForWorker(false); },
+      card: normCard(c), teamName: teamName, logo: logoHTML, esc: esc, fmtPct: fmtPct1,
+      p5: r && complete(c) && r.tag === cardKey(c) ? r.p5 : null, running: !!state.running[st],
+      set: function (round, pairs, w) { simSet(st, round, pairs, w); },
+      resetFrom: function (round) { dropWhatIfAfter(st, round - 1); },
+      commit: onScenarioChanged
+    });
   }
 
   // ------------------------------------------------- AI-аналіз та експерти ---
@@ -1340,7 +1742,7 @@
     STAGES.forEach(function (st) { state.resStale[st] = true; if (state.opt[st]) state.optStale[st] = true; });
     state.profP5 = {}; state.poStale = true;
     if (state.stage === PO) requestPlayoffs();
-    else if (state.stage) { requestRun(state.stage); ensureRec(state.stage); scheduleProfileStats(); }
+    else if (state.stage) { requestRun(state.stage); ensureRec(state.stage); requestLeague(); }
     return true;
   }
 
@@ -1355,32 +1757,47 @@
     if (front) insQueue.unshift(st); else insQueue.push(st);
     state.insStale[st] = true;
     pumpInsights();
-    if (st === state.stage) keepFocus(renderInsights);
+    if (st === state.stage && state.view === 'stats') keepFocus(renderInsights);
   }
-  function pumpInsights() {
-    if (insBusy || !insQueue.length) return;
-    var st = insQueue.shift(), c = cardOf(st), cc = complete(c) ? normCard(c) : null, id = ++seq;
-    var others = fitsActive(), prev = state.ins[st];
-    delete others[st];
-    insBusy = st; state.insReq = id; state.insSrc = fitSrc(st);
-    insW.postMessage({ type: 'insights', reqId: id, stage: st, cfg: state.cfg, live: liveForWorker(false),
-      ai: aiFileOf(st), aiAll: aiMerged(), boards: boardsOf(st), fitsOther: others, order: INS_ORDER,
-      flags: state.flags, userCard: cc, tag: cc ? cardKey(cc) : '', meta: state.profile,
-      prevFit: state.fit[st] || null, prevCards: prev && prev.cardsKey ? { key: prev.cardsKey, cards: prev.cards } : null,
-      wantExpertCard: !isClosed(st), sims: INS_SIMS });
+  function pumpInsights() { if (insQueue.length) bgWant('ins'); }
+  /** Чи треба порахувати підгонку експертів (вона йде в модель): є борди, а збереженої підгонки немає. */
+  function needFit(st) {
+    var f = state.fit[st];
+    return !!boardsOf(st) && !(f && f.src === fitSrc(st)) && state.fitWait[st] !== state.liveSig;
   }
+  BG_START.ins = function () {
+    while (insQueue.length) {
+      var st = insQueue.shift(), full = st === state.stage && state.view === 'stats';
+      if (!full && !needFit(st)) { state.insStale[st] = !!state.ins[st]; continue; }      // для невидимого — нічого рахувати
+      var c = cardOf(st), cc = complete(c) ? normCard(c) : null, id = ++seq;
+      var others = fitsActive(), prev = state.ins[st];
+      delete others[st];
+      insBusy = st; state.insReq = id; state.insSrc = fitSrc(st);
+      insW.postMessage({ type: 'insights', reqId: id, stage: st, cfg: state.cfg, live: liveForWorker(false),
+        ai: aiFileOf(st), aiAll: aiMerged(), boards: boardsOf(st), fitsOther: others, order: INS_ORDER,
+        flags: state.flags, userCard: cc, tag: cc ? cardKey(cc) : '', meta: state.profile,
+        prevFit: state.fit[st] || null, prevCards: prev && prev.cardsKey ? { key: prev.cardsKey, cards: prev.cards } : null,
+        wantExpertCard: !isClosed(st), sims: INS_SIMS, fitOnly: !full });
+      return true;
+    }
+    return false;
+  };
   function onInsights(e) {
     var r = e.data, st = r.stage;
     insBusy = null;
+    bgDone('ins');
     if (r.reqId === state.insReq) {
       if (r.error) state.insErr[st] = r.error;
       else {
-        state.insErr[st] = null; state.ins[st] = r;
-        state.insStale[st] = insQueue.indexOf(st) >= 0;
+        state.insErr[st] = null;
+        if (!r.fitOnly || !state.ins[st] || state.ins[st].fitOnly) state.ins[st] = r;   // легкий результат не затирає повний
+        state.insStale[st] = insQueue.indexOf(st) >= 0 || !!r.fitOnly;
+        if (r.exp && r.exp.waitingField) state.fitWait[st] = state.liveSig;
         var f = r.exp && r.exp.fit;
         if (f) { f.src = state.insSrc; state.fit[st] = f; lsSet('fit-' + st, JSON.stringify(f)); }
         else if (state.fit[st] && !(r.exp && r.exp.waitingField)) { delete state.fit[st]; lsDel('fit-' + st); }
         if (modelMaybeChanged()) STAGES.forEach(function (s) { if (s !== st && state.ins[s]) state.insStale[s] = true; });
+        if (r.fitOnly && st === state.stage && state.view === 'stats') requestInsights(st, true);
       }
     }
     pumpInsights();
@@ -1457,7 +1874,8 @@
     var imp = impactOf(st);
     if (imp) html += '<p class="ins-imp">Твоя картка: без AI ' + fmtPct1(imp.base) + ' → з AI ' + fmtPct1(imp.withAI) + ' <b>' + fmtPP(imp.withAI - imp.base) + '</b></p>';
     if (f.ownCard) {
-      if (x && x.cards && x.cards.ai) {
+      if (x && x.fitOnly) html += '<div class="busy"><span class="spinner"></span>Рахую шанс картки AI…</div>';
+      else if (x && x.cards && x.cards.ai) {
         html += '<div class="' + (state.insStale[st] ? 'is-stale' : '') + '">' + insCardHTML('Картка AI', 'складена до того, як AI побачив піки експертів', x.cards.ai, 'ai', st, c) + '</div>' +
           (f.ownCardNote ? '<p class="fine">' + esc(f.ownCardNote) + '</p>' : '');
       } else if (x) html += '<p class="fine">Картка AI у файлі некоректна: потрібно 2 / 6 / 2 різні команди цієї стадії.</p>';
@@ -1509,6 +1927,7 @@
         (down.length ? '<div class="grp wide"><span class="gl">▼ Експерти оцінюють нижче, ніж модель</span><div class="chips">' + teamChips(down) + '</div></div>' : '') + '</div>';
     } else if (e.enough) html += '<p class="fine">Порядок команд в експертів майже такий, як у моделі.</p>';
     var cards = '';
+    if (x.fitOnly) cards = '<div class="busy"><span class="spinner"></span>Рахую картки експертів…</div>';
     if (x.cards.majority) cards += insCardHTML('Картка більшості', 'найчастіші піки в кожному слоті', x.cards.majority, 'majority', st, c);
     if (x.cards.expert) cards += insCardHTML('Картка за експертами', 'найкраща, якщо експерти мають рацію', x.cards.expert, 'expert', st, c);
     if (cards) html += '<div class="' + (state.insStale[st] ? 'is-stale' : '') + '">' + cards + '</div>';
@@ -1538,7 +1957,7 @@
   }
 
   function renderInsights() {
-    if (!state.cfg || state.stage === PO) return;
+    if (!state.cfg || state.stage === PO || state.view !== 'stats') return;
     var ok = typeof Insights !== 'undefined' && !!state.insRaw;
     $('insDuo').hidden = !ok;
     if (ok) { renderAI(); renderExperts(); }
@@ -1611,8 +2030,7 @@
     var po = state.po;
     if (!po) return null;
     if (po.bracketKnown) return { matches: po.matches, seeds: po.seeds, best: po.best, user: po.user, teams: po.teams, real: true };
-    var pr = po.projected;
-    return pr ? { matches: pr.matches, seeds: pr.seeds, best: pr.best, user: pr.user, teams: pr.teams, real: false } : null;
+    return null;                                     // до кінця Stage 3 сітки ще немає — піки ставити нікуди
   }
   function poTeam(po, id) { var o = null; po.teams.forEach(function (t) { if (t.id === id) o = t; }); return o || { id: id }; }
 
@@ -1725,6 +2143,7 @@
     m.forEach(function (mm, i) {
       var w = qfOf(i), rw = R.qf[i];
       [mm.a, mm.b].forEach(function (id, t) {
+        if (!id) { slots += ph('Сід ' + [[1, 8], [4, 5], [2, 7], [3, 6]][i][t], at(0, qfTop(i, t))); return; }
         // після матчу тут лише справжній результат; чи вгадано — видно в колонці півфіналів
         slots += poRow('qf', id, { pct: t ? 1 - mm.pA : mm.pA, what: 'пройде у півфінал', picked: w === id && !rw, edit: edit, seed: seedOf(id),
           style: at(0, qfTop(i, t)), result: rw ? (rw === id ? 'won' : 'lost') : null, score: sc(1, id), liveNow: going(1, id) });
@@ -1770,13 +2189,19 @@
   }
 
   function renderPlayoffs() {
-    var el = $('poView'), po = state.po;
+    var el = $('poCard'), po = state.po;
     if (!po) {
       el.innerHTML = '<div class="card"><div class="busy"><span class="spinner"></span>' +
         (state.poErr ? 'Помилка розрахунку: ' + esc(state.poErr) : state.live ? 'Програю мейджор до фіналу…' : 'Завантажую результати…') + '</div></div>';
       return;
     }
     var stale = state.poBusy || state.poStale, B = poBracket(), html = '';
+    if (!po.bracketKnown) {
+      var none = { a: null, b: null, pA: null };
+      html += '<section class="card po-main"><div class="label">Сітка плей-оф</div>' +
+        '<p class="hint">Хто пройде в плей-оф, ще невідомо. Сітка заповниться, коли завершиться Stage 3 (≈ 9 грудня), — тоді тут можна буде обрати свої 7 піків.</p>' +
+        bracketHTML({ matches: [none, none, none, none], seeds: [], team: function () { return {}; } }, poNorm(null), false) + '</section>';
+    }
     if (B) {
       var c = poNorm(poCard()), edit = canEdit(PO), u = B.user, real = B.real, tp = {};
       B.teams.forEach(function (t) { tp[t.id] = t; });
@@ -1976,7 +2401,8 @@
       '<div class="share-prev" id="sharePrev"><span class="spinner"></span></div>' +
       '<div class="share-acts"><button class="btn primary" data-act="share-img">Скопіювати картинку</button><button class="btn" data-act="share-dl">Зберегти PNG</button>' +
       '<button class="btn" data-act="share-txt">Скопіювати текстом</button><button class="btn" data-act="share-native" id="shareNative" hidden>Надіслати…</button>' +
-      '<span class="grow"></span><button type="button" class="btn" data-act="modal-cancel">Закрити</button></div>', null, 'wide');
+      '<span class="grow"></span><button type="button" class="btn" data-act="invite">' + ICON.users + 'Посилання для змагання</button>' +
+      '<button type="button" class="btn" data-act="modal-cancel">Закрити</button></div>', null, 'wide');
     drawShare(d).then(function (cv) {
       cv.toBlob(function (b) {
         share.blob = b;
@@ -2017,9 +2443,10 @@
   function switchStage(st) {
     if (st === state.stage) return;
     state.stage = st; lsSet('stage', st);
-    state.showVariants = false; state.showAllRoot = false;
+    state.showVariants = false; state.showAllRoot = false; state.leagueOpen = null;
     closePicker();
     render();
+    if (state.view === 'stats' && st !== PO) switchView('stats');
     if (st === PO) {
       if (!state.po || state.poStale || state.po.meta !== state.profile || state.po.tag !== poKey(poNorm(poCard()))) requestPlayoffs();
       return;
@@ -2027,9 +2454,9 @@
     var c = cardOf(st), r = state.res[st];
     if (!state.running[st] && (!r || state.resStale[st] || (complete(c) && r.tag !== cardKey(c)))) requestRun(st);
     ensureRec(st);
-    scheduleProfileStats();
+    requestLeague();
     var x = state.ins[st];
-    if (hasInsights(st) && (!x || state.insStale[st] || x.meta !== state.profile || x.tag !== (complete(c) ? cardKey(c) : ''))) requestInsights(st, true);
+    if (state.view === 'stats' && hasInsights(st) && (!x || x.fitOnly || state.insStale[st] || x.meta !== state.profile || x.tag !== (complete(c) ? cardKey(c) : ''))) requestInsights(st, true);
   }
 
   // ---------------------------------------------------- підказки і тости ---
@@ -2085,10 +2512,21 @@
   document.addEventListener('click', function (e) {
     if (!modalEl.hidden && e.target === modalEl) { closeModal(); return; }
     if (!pickerEl.hidden && !pickerEl.contains(e.target) && !(pickerAnchor && pickerAnchor.contains(e.target))) closePicker();
-    var el = e.target.closest('[data-tab],[data-act],[data-prof],[data-pick-team],[data-place],[data-copy-from],[data-cell],[data-wi],[data-po],.tcard,.pchip');
+    var el = e.target.closest('[data-tab],[data-view],[data-lrow],[data-act],[data-prof],[data-pick-team],[data-place],[data-copy-from],[data-cell],[data-wi],[data-po],.tm');
     if (!el || el.disabled) return;
     var st = state.stage, act = el.dataset.act;
     if (el.dataset.tab) return switchStage(el.dataset.tab);
+    if (el.dataset.view) return switchView(el.dataset.view);
+    if (el.dataset.lrow && !act) { state.leagueOpen = state.leagueOpen === el.dataset.lrow ? null : el.dataset.lrow; return keepFocus(renderFriends); }
+    if (act === 'best') return bestCard();
+    if (act === 'invite') { closeModal(); return inviteModal(); }
+    if (act === 'add-link') return addLinkModal();
+    if (act === 'copy-link') return copyInvite();
+    if (act === 'native-link') return nativeInvite();
+    if (act === 'back-me') return switchProfile('me');
+    if (act === 'open-profile') { switchProfile(el.dataset.id); return switchView('card'); }
+    if (act === 'rename-friend') return renameProfile(el.dataset.id);
+    if (act === 'delete-friend') return deleteProfile(el.dataset.id);
     if (act === 'profile-menu') { e.stopPropagation(); return profileMenu(el); }
     if (el.dataset.prof && !act) return switchProfile(el.dataset.prof);
     if (el.dataset.pickTeam) { closePicker(); return placeAt(el.dataset.pickTeam, el.dataset.slot, +el.dataset.i); }
@@ -2130,13 +2568,9 @@
     if (act === 'delete-profile') return deleteProfile();
     if (act === 'copy-profile') return copyProfileMenu(pickerAnchor || el);
     if (act === 'modal-cancel') return closeModal();
-    if (el.classList.contains('tcard')) {
+    if (el.classList.contains('tm')) {
       if (!canEdit(st)) return toastClosed();
       return pickTeamFor(el, el.dataset.slot, +el.dataset.i);
-    }
-    if (el.classList.contains('pchip')) {
-      if (!canEdit(st)) return toastClosed();
-      return pickSlotFor(el, el.dataset.team);
     }
   });
   function trapTab(e, box) {
@@ -2158,7 +2592,7 @@
       e.preventDefault(); var u = toastUndo; hideToast(); u(); return;
     }
     var el = e.target;
-    if ((e.key === 'Enter' || e.key === ' ') && el.classList && el.classList.contains('tcard') && el.tagName !== 'BUTTON') {
+    if ((e.key === 'Enter' || e.key === ' ') && el.classList && el.classList.contains('tm') && el.tagName !== 'BUTTON') {
       e.preventDefault(); el.click();
     }
   });
@@ -2168,7 +2602,7 @@
   document.addEventListener('dragstart', function (e) {
     var el = e.target.closest && e.target.closest('[draggable="true"][data-team]');
     if (!el) return;
-    dragId = el.dataset.team; dragFromCard = el.classList.contains('tcard');
+    dragId = el.dataset.team; dragFromCard = el.classList.contains('tm');
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', dragId);
     el.classList.add('dragging');
@@ -2178,7 +2612,7 @@
     dragId = null;
     document.querySelectorAll('.dragging, .drag-over').forEach(function (n) { n.classList.remove('dragging', 'drag-over'); });
   });
-  function dropTarget(e) { return e.target.closest && (e.target.closest('.tcard[data-slot]') || e.target.closest('.box[data-drop]') || e.target.closest('#pool')); }
+  function dropTarget(e) { return e.target.closest && (e.target.closest('.tm[data-slot]') || e.target.closest('.sg[data-drop]')); }
   document.addEventListener('dragover', function (e) {
     if (!dragId) return;
     var t = dropTarget(e);
@@ -2194,8 +2628,7 @@
     if (!t) return;
     e.preventDefault();
     t.classList.remove('drag-over');
-    if (t.id === 'pool') return dragFromCard ? removePick(id, true) : undefined;
-    if (t.classList.contains('tcard')) return placeAt(id, t.dataset.slot, +t.dataset.i);
+    if (t.classList.contains('tm')) return placeAt(id, t.dataset.slot, +t.dataset.i);
     return placeAt(id, t.dataset.drop, null);
   });
 
@@ -2209,6 +2642,7 @@
   };
 
   setInterval(function () {
+    if (document.hidden) return;                       // вкладка прихована — не смикаємо мережу
     loadResults(false, true).then(function (changed) {
       if (changed) onDataChanged();
       else if (state.stage) keepFocus(function () { renderTabs(); renderHead(); });
@@ -2234,9 +2668,19 @@
 
   window.addEventListener('online', retryFailedSaves);
   window.addEventListener('focus', retryFailedSaves);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) bgPump(); });
+  window.addEventListener('hashchange', function () {
+    var t = League.tokenFrom(location.hash);
+    if (t) { history.replaceState(null, '', location.href.replace(/#.*$/, '')); importToken(t); }
+  });
+  document.addEventListener('input', function (e) { if (e.target && (e.target.id === 'meName' || e.target.id === 'inviteAll')) updateInvite(); });
 
   // ---------------------------------------------------------------- старт ---
-  newRunWorker(); newOptWorker(); newManyWorker(); newInsWorker(); newPoWorker();
+  newRunWorker(); newOptWorker(); newLeagueWorker(); newInsWorker(); newPoWorker();
+  loadMe();
+  (function () { var v = lsGet('view'); if (VIEWS.indexOf(v) >= 0) state.view = v; })();
+  // Посилання від друга (…#join=…): прибираємо його з адресного рядка й пропонуємо додати після завантаження.
+  (function () { var t = League.tokenFrom(location.hash); if (t) { pendingJoin = t; history.replaceState(null, '', location.href.replace(/#.*$/, '')); } })();
   STAGES.forEach(function (st) { var f = lsJSON('fit-' + st); if (f && f.key && f.deltas) state.fit[st] = f; });
   (function () { var fl = lsJSON('flags'); if (fl) state.flags = { ai: fl.ai !== false, exp: fl.exp !== false }; })();
   $('refreshBtn').innerHTML = ICON.refresh;
@@ -2254,11 +2698,10 @@
   }).then(function () {
     if (!lsGet('stage') && state.live) state.stage = defaultStage();
     render();
-    requestRun(state.stage);
-    ensureRec(state.stage);
-    scheduleProfileStats();
-    requestInsights(state.stage, true);
-    STAGES.forEach(function (st) { if (st !== state.stage) requestInsights(st, false); });
+    if (state.stage === PO) requestPlayoffs();
+    else { requestRun(state.stage); ensureRec(state.stage); requestLeague(); }
+    STAGES.forEach(function (st) { requestInsights(st, st === state.stage); });   // у фоні — лише те, що потрібно моделі
+    if (pendingJoin) { var t = pendingJoin; pendingJoin = null; importToken(t); }
   }).catch(function (e) {
     $('alerts').innerHTML = '<div class="alert critical"><span class="ai">!</span><span>Не вдалося завантажити сторінку: ' + esc(e && e.message || e) + '</span></div>';
   });

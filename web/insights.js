@@ -273,7 +273,8 @@
    * Повний розрахунок для однієї стадії (працює у Web Worker і в тестах).
    * d: {cfg, live, stage, ai — AI-файл цієї стадії, aiAll — зведені AI-поправки всіх стадій,
    *     boards — борди експертів цієї стадії, fitsOther — підгонки експертів інших стадій ({stage: {deltas}}), order,
-   *     flags: {ai, exp} — що враховує модель, userCard, prevFit — кеш підгонки, prevCards — кеш карток, wantExpertCard, sims}.
+   *     flags: {ai, exp} — що враховує модель, userCard, prevFit — кеш підгонки, prevCards — кеш карток, wantExpertCard, sims,
+   *     fitOnly — лише підгонка експертів, без карток для порівняння і впливу на картку}.
    * Повертає поправки AI, зведення експертів, фінальні зсуви, картки для порівняння і вплив на картку користувача.
    */
   function job(Engine, d) {
@@ -307,7 +308,8 @@
     var expAll = d.fitsOther ? mergeExperts(fitsAll, order) : overlay(d.expOther, blend);
     var finalDeltas = addDeltas(aiOn, flags.exp ? expAll : {});
     var cards = {}, impact = null, ck = null;
-    if (vi >= 0) {
+    // fitOnly: лише підгонка експертів для моделі (швидко); картки для порівняння і вплив — коли відкрито «Аналітику».
+    if (vi >= 0 && !d.fitOnly) {
       var inField = null;
       if (fieldIds) { inField = {}; fieldIds.forEach(function (id) { inField[id] = 1; }); }
       var own = d.ai && d.ai.ownCard ? cleanCard(d.ai.ownCard, inField || known) : null;
@@ -338,7 +340,7 @@
       }
     }
     return { ai: { items: ai.items, skipped: ai.skipped, deltas: ai.deltas, hasFile: !!(d.ai && !d.ai.error), own: cards.ai ? cards.ai.card : null },
-      exp: exp, finalDeltas: finalDeltas, cards: cards, cardsKey: ck, impact: impact };
+      exp: exp, finalDeltas: finalDeltas, cards: cards, cardsKey: ck, impact: impact, fitOnly: !!d.fitOnly };
   }
 
   global.Insights = {

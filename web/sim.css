@@ -1,0 +1,41 @@
+/* cs2predict — симулятор стадії (web/sim.js). Кольори беруться з токенів style.css. */
+.sim-card { margin-bottom: 16px; }
+.sim-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.sim-p { margin-left: auto; font-size: 14px; color: var(--ink-2); }
+.sim-p b { color: var(--ink); font-size: 17px; font-variant-numeric: tabular-nums; }
+.sim-wrap { overflow-x: auto; margin-top: 14px; padding-bottom: 6px; }
+.sim { display: grid; grid-template-columns: repeat(5, minmax(150px, 1fr)) minmax(170px, 1.1fr); gap: 14px; min-width: 980px; align-items: start; }
+.sim-col { display: flex; flex-direction: column; gap: 10px; }
+.sim-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; font-weight: 700; color: var(--ink-2); min-height: 26px; }
+.sim-acts { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.sim-acts .ib { border: 0; background: var(--surface-2); color: var(--ink-2); font: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 7px; cursor: pointer; }
+.sim-acts .ib + .ib { border-left: 1px solid var(--line); }
+.sim-acts .ib:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.sim-acts .ib:disabled { opacity: .35; cursor: default; }
+.sim-g { background: var(--surface-2); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.sim-rec { font-size: 12px; font-weight: 800; color: var(--ink-2); padding: 0 2px; }
+.sim-m { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 4px; background: var(--surface); border-radius: 10px; padding: 5px 6px; }
+.sim-m .vs { font-size: 10.5px; color: var(--muted); font-weight: 600; }
+.sim-m.bo3 .vs { color: var(--accent); }
+.sim-m.empty { opacity: .6; }
+.sim .q { display: inline-grid; place-items: center; width: 34px; height: 34px; margin: 0 auto; border-radius: 50%; border: 1px dashed color-mix(in srgb, var(--ink) 25%, transparent); color: var(--muted); font-weight: 700; }
+.sim-t { width: 42px; height: 42px; margin: 0 auto; padding: 3px; border-radius: 50%; border: 2px solid transparent; background: none; cursor: pointer; display: grid; place-items: center; transition: transform .1s, opacity .15s; }
+.sim-t .logo { width: 34px; height: 34px; }
+.sim-t:hover:not(:disabled) { transform: scale(1.08); border-color: color-mix(in srgb, var(--ink) 25%, transparent); }
+.sim-t.won { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-wash); }
+.sim-t.won.real { border-color: var(--good); box-shadow: none; }
+.sim-t.lost { opacity: .35; }
+.sim-t.ro, .sim-t:disabled { cursor: default; }
+.sim-res { gap: 8px; }
+.sim-b { border-radius: 12px; padding: 8px; }
+.sim-b.win { background: var(--win-bg); }
+.sim-b.lose { background: var(--lose-bg); }
+.sim-b.win .sim-rec { color: var(--win-ink); }
+.sim-b.lose .sim-rec { color: var(--lose-ink); }
+.sim-bt { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 30px; align-items: center; }
+.sim-tm { width: 32px; height: 32px; border-radius: 50%; display: inline-block; border: 2px solid transparent; }
+.sim-tm .logo { width: 28px; height: 28px; }
+.sim-tm.hit { border-color: var(--good); }
+.sim-tm.miss { border-color: var(--critical); }
+.sim-sum { margin: 12px 0 0; font-size: 14px; }
+.sim-sum b { font-variant-numeric: tabular-nums; }

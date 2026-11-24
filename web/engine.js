@@ -606,6 +606,61 @@
     };
   }
 
+  /**
+   * Змагання з друзями: одні й ті самі N симуляцій стадії viewKey для кількох карток одразу.
+   * cards: {id: {p30, adv, p03}} — неповні картки теж можна (рахуються лише наявні піки).
+   * З тим самим seed і N симуляції збігаються з runMajor, тож шанс 5+ кожної картки той самий, що на її сторінці.
+   * Повертає {sims, players: {id: {p5, eK, hist, pFirst, eRank, n}}}:
+   *   pFirst — частка симуляцій, де картка вгадала найбільше (нічия ділиться порівну між тими, хто її поділив);
+   *   eRank — середнє місце (1 — перше; при нічиї — середнє з місць, які ділять).
+   */
+  function runLeague(M, viewKey, cards, opts) {
+    opts = opts || {};
+    var N = opts.sims || DEFAULTS.sims, sd = opts.sd == null ? DEFAULTS.sd : opts.sd;
+    var rng = mulberry32(opts.seed || DEFAULTS.seed);
+    var vi = M.keys.indexOf(viewKey);
+    if (vi < 0) throw new Error('unknown stage ' + viewKey);
+    var ids = Object.keys(cards || {}), P = ids.length, j, q, p;
+    var picks = ids.map(function (id) { return cardPicks(M, cards[id]); });
+    var hist = picks.map(function (pk) { return new Float64Array(pk.length + 1); });
+    var first = new Float64Array(P), rankSum = new Float64Array(P), K = new Int32Array(P), inF = new Float64Array(M.teams.length);
+    for (var s = 0; s < N; s++) {
+      var V = simulateMajorOnce(M, rng, sd, vi).stages[vi], best = -1, nb = 0;
+      for (q = 0; q < V.field.length; q++) inF[V.field[q]]++;
+      for (j = 0; j < P; j++) {
+        var k = 0, pj = picks[j];
+        for (p = 0; p < pj.length; p++) {
+          var li = V.loc[pj[p].g];
+          if (li >= 0 && slotHit(pj[p].slot, V.w[li], V.l[li])) k++;
+        }
+        K[j] = k; hist[j][k]++;
+        if (k > best) { best = k; nb = 1; } else if (k === best) nb++;
+      }
+      for (j = 0; j < P; j++) {
+        if (K[j] === best) first[j] += 1 / nb;
+        var more = 0, same = 0;
+        for (q = 0; q < P; q++) { if (K[q] > K[j]) more++; else if (K[q] === K[j]) same++; }
+        rankSum[j] += 1 + more + (same - 1) / 2;
+      }
+    }
+    // Справжній стан піків (за зіграними матчами): зайшов, згорів чи ще в грі — як у runMajor.
+    var rec = currentStageRecords(M, vi), field = fieldOf(M, vi), players = {};
+    ids.forEach(function (id, jj) {
+      var h = hist[jj], p5 = 0, eK = 0, cnt = { hit: 0, dead: 0, open: 0 };
+      for (var kk = 0; kk < h.length; kk++) { if (kk >= 5) p5 += h[kk]; eK += kk * h[kk]; }
+      var status = picks[jj].map(function (pk) {
+        var inField = field ? field.indexOf(pk.g) >= 0 : inF[pk.g] > 0;
+        var st = !inField ? 'dead' : pickStatus(pk.slot, rec.w[pk.g], rec.l[pk.g]);
+        cnt[st]++;
+        return { slot: pk.slot, id: pk.id, status: st };
+      });
+      players[id] = { p5: p5 / N, eK: eK / N, pFirst: first[jj] / N, eRank: rankSum[jj] / N, n: picks[jj].length,
+        hit: cnt.hit, dead: cnt.dead, open: cnt.open, picks: status,
+        hist: Array.prototype.map.call(h, function (x) { return x / N; }) };
+    });
+    return { stage: viewKey, sims: N, fieldKnown: !!field, players: players };
+  }
+
   // ------------------------------------------------------ оптимізатор ---
   function collectBits(M, vi, N, rng, sd) {
     var G = M.teams.length, X = [new Array(G), new Array(G), new Array(G)], inF = new Float64Array(G);
@@ -1222,7 +1277,7 @@
     swissCore: swissCore, prepare: prepare, simulateOnce: simulateOnce, currentRecords: currentRecords,
     buildMajor: buildMajor, simulateMajorOnce: simulateMajorOnce, fieldOf: fieldOf, stageComplete: stageComplete,
     derivedSeeds: derivedSeeds, derivedField: derivedField, qualifiersOf: qualifiersOf, currentStageRecords: currentStageRecords,
-    runMajor: runMajor, run: run,
+    runMajor: runMajor, run: run, runLeague: runLeague,
     exactMaxE: exactMaxE, evalCards: evalCards, optimize: optimize, collectBits: collectBits, localSearch: localSearch,
     cardScore: cardScore, cardKey: cardKey,
     derivedPending: derivedPending, completedRounds: completedRounds,
