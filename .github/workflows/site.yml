@@ -1,0 +1,38 @@
+name: Сайт і результати
+
+# Раз на 10 хв: бере результати з Liquipedia (один запит), перезбирає дані AI/експертів і публікує сайт.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pages
+        uses: actions/configure-pages@v5
+      - name: Попередні результати з сайту
+        run: curl -sf "${{ steps.pages.outputs.base_url }}/data/results.json" -o data/prev-results.json || true
+      - name: Свіжі результати з Liquipedia
+        run: python3 tools/update_results.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - id: deployment
+        uses: actions/deploy-pages@v4
