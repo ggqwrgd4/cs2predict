@@ -1,0 +1,33 @@
+{
+ "stage": "stage1",
+ "collectedAt": "2026-11-24T13:32:00+02:00",
+ "note": "Картки опубліковано 18–23.11, до старту Stage 1; після цього автори могли їх змінити. Не враховано картки, знайдені через UA/RU/СНД-медіа: Zeus, YEKINDAR, dupreeh, AdreN, markeloff.",
+ "boards": [
+  {"analyst": "SIH", "group": "SIH", "sourceUrl": "https://blog.sih.app/en/news/stage-1-pickem-for-pgl-singapore-major-2026-who-pros-analysts-and-hltv-are-backing", "p30": ["heroic", "100t"], "adv": ["pvision", "faze", "tl", "gosh", "ef", "m80"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "HLTV Confirmed", "group": "HLTV Confirmed", "sourceUrl": "https://blog.sih.app/en/news/stage-1-pickem-for-pgl-singapore-major-2026-who-pros-analysts-and-hltv-are-backing", "p30": ["heroic", "pvision"], "adv": ["100t", "faze", "tl", "gosh", "nip", "9z"], "p03": ["chinggis", "fq"]},
+  {"analyst": "Mauisnake", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["heroic", "pvision"], "adv": ["100t", "faze", "tl", "nip", "9z", "m80"], "p03": ["chinggis", "imp"]},
+  {"analyst": "STYKO", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["tl", "pvision"], "adv": ["100t", "faze", "heroic", "nip", "dendele", "m80"], "p03": ["lvg", "imp"]},
+  {"analyst": "chopper", "group": "chopper", "p30": ["nip", "pvision"], "adv": ["100t", "faze", "heroic", "gosh", "tl", "m80"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "MAJ3R", "group": "MAJ3R", "p30": ["gosh", "pvision"], "adv": ["100t", "faze", "nip", "9z", "tl", "ef"], "p03": ["chinggis", "wildcard"]},
+  {"analyst": "fl0m", "group": "fl0m", "p30": ["pvision", "nip"], "adv": ["tl", "9z", "faze", "heroic", "100t", "gosh"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "Hawka", "group": "Hawka", "p30": ["pvision", "100t"], "adv": ["nip", "heroic", "tl", "faze", "m80", "gosh"], "p03": ["chinggis", "imp"]},
+  {"analyst": "HeatoN", "group": "HeatoN", "p30": ["100t", "gosh"], "adv": ["nip", "tl", "pvision", "heroic", "dendele", "faze"], "p03": ["chinggis", "wildcard"]},
+  {"analyst": "austincs", "group": "austincs", "p30": ["pvision", "nip"], "adv": ["heroic", "100t", "tl", "faze", "ef", "gosh"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "KingT", "group": "KingT", "p30": ["heroic", "pvision"], "adv": ["nip", "faze", "m80", "9z", "tl", "100t"], "p03": ["imp", "dendele"]},
+  {"analyst": "NartOutHere", "group": "NartOutHere", "p30": ["nip", "heroic"], "adv": ["tl", "pvision", "faze", "100t", "9z", "gosh"], "p03": ["chinggis", "imp"]},
+  {"analyst": "Thour", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "heroic"], "adv": ["faze", "nip", "tl", "100t", "9z", "ef"], "p03": ["lvg", "chinggis"]},
+  {"analyst": "Dinko", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "nip"], "adv": ["faze", "tl", "100t", "9z", "gosh", "ef"], "p03": ["chinggis", "imp"]},
+  {"analyst": "James Banks", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["9z", "100t"], "adv": ["nip", "tl", "ef", "gosh", "heroic", "faze"], "p03": ["chinggis", "imp"]},
+  {"analyst": "Ozzny", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "gosh"], "adv": ["heroic", "nip", "faze", "tl", "100t", "9z"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "YNk", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "100t"], "adv": ["gosh", "tl", "faze", "heroic", "m80", "nip"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "Pimp", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "9z"], "adv": ["heroic", "nip", "ef", "gosh", "tl", "faze"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "Tech Girl", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "heroic"], "adv": ["tl", "100t", "m80", "faze", "gosh", "dendele"], "p03": ["9z", "chinggis"]},
+  {"analyst": "Bleh", "group": "Таланти PGL", "sourceUrl": "https://inspekt.gg/pickem", "p30": ["pvision", "heroic"], "adv": ["faze", "100t", "gosh", "tl", "nip", "fq"], "p03": ["chinggis", "imp"]},
+  {"analyst": "Scrawny", "group": "Scrawny", "p30": ["100t", "nip"], "adv": ["tl", "heroic", "m80", "pvision", "faze", "fq"], "p03": ["imp", "chinggis"]},
+  {"analyst": "Strafe", "group": "Strafe", "p30": ["pvision", "heroic"], "adv": ["100t", "gosh", "tl", "faze", "m80", "9z"], "p03": ["nip", "wildcard"]},
+  {"analyst": "esport.vision", "group": "esport.vision", "p30": ["heroic", "100t"], "adv": ["pvision", "tl", "faze", "nip", "ef", "gosh"], "p03": ["chinggis", "lvg"]},
+  {"analyst": "Pley (Frost)", "group": "Pley (Frost)", "sourceUrl": "https://pley.gg/cs2/singapore-major-pickem-picks-pros-creators/", "p30": ["pvision", "nip"], "adv": ["tl", "m80", "heroic", "100t", "ef", "fq"], "p03": ["chinggis", "imp"]},
+  {"analyst": "Vince", "group": "Vince", "p30": ["pvision", "9z"], "adv": [], "p03": ["wildcard", "chinggis"]},
+  {"analyst": "voo", "group": "voo", "p30": ["pvision", "heroic"], "adv": [], "p03": ["imp", "chinggis"]}
+ ]
+}
