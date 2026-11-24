@@ -603,11 +603,7 @@
 
   // --------------------------------------------------- змагання: розрахунок ---
   /** Картки всіх учасників на стадію (хто має хоч один пік). */
-  function leagueCards(st) {
-    var out = {};
-    state.profiles.forEach(function (p) { var c = leagueCard(st, p.id); if (nPicks(c)) out[p.id] = c; });
-    return out;
-  }
+  function leagueCards(st) { return lgCards(st); }
   function leagueKey(st, cards) {
     modelCfg();
     return hashStr(st + '#' + (state.stageSig[st] || '') + '#' + (state.stageSig[STAGES[STAGES.indexOf(st) - 1]] || '') + '#' +
@@ -617,8 +613,8 @@
   function newLeagueWorker() { if (leagueW) leagueW.terminate(); leagueW = new Worker(WORKER_URL); leagueW.onmessage = onLeague; }
   function requestLeague() { clearTimeout(leagueTimer); leagueTimer = setTimeout(startLeague, 300); }
   function startLeague() {
-    var st = state.stage;
-    if (!state.cfg || !state.live || st === PO || state.profiles.length < 2) return false;
+    var st = lg.stage;
+    if (!state.cfg || !state.live || !st || st === PO || state.view !== 'league') return false;
     var cards = leagueCards(st);
     if (Object.keys(cards).length < 2) return false;
     var key = leagueKey(st, cards), L = state.league[st];
@@ -628,7 +624,7 @@
     var id = ++seq;
     state.leagueReq = id;
     leagueW.postMessage({ type: 'league', reqId: id, stage: st, cfg: modelCfg(), live: liveForWorker(false), cards: cards, tag: key, opts: { sims: LEAGUE_SIMS } });
-    keepFocus(renderFriends);
+    renderLeague();
     return true;
   }
   function onLeague(e) {
@@ -636,7 +632,7 @@
     leagueBusy = false;
     if (r.reqId !== state.leagueReq) return;
     state.league[r.stage] = r.error ? { err: r.error, key: r.tag } : { res: r, key: r.tag };
-    if (r.stage === state.stage) keepFocus(renderFriends);
+    if (r.stage === lg.stage) renderLeague();
   }
 
 
@@ -815,12 +811,15 @@
   function render() { keepFocus(renderAll); }
   function renderAll() {
     if (!state.stage || !state.cfg) return;
-    var po = state.stage === PO;
-    $('swissView').hidden = po; $('poView').hidden = !po;
-    renderTabs(); renderHead(); renderProfiles(); renderTools();
-    if (po) { renderPlayoffs(); renderSaveState(); renderFriends(); return; }
+    var po = state.stage === PO, lgv = state.view === 'league';
+    $('swissView').hidden = po || lgv; $('poView').hidden = !po || lgv; $('leagueView').hidden = !lgv;
+    document.querySelector('.stagehead').hidden = lgv; document.querySelector('.toolbar').hidden = lgv;
+    renderTabs();
+    if (lgv) { renderLeague(); return; }
+    renderHead(); renderProfiles(); renderTools();
+    if (po) { renderPlayoffs(); renderSaveState(); return; }
     renderPool(); renderBoard(); renderGauge(); renderDist();
-    renderSaveState(); renderRec(); renderNext(); /* renderSim(); — симулятор стадії поки в архіві */ renderInsights(); renderTeamsTable(); renderMatches(); renderFriends();
+    renderSaveState(); renderRec(); renderNext(); /* renderSim(); — симулятор стадії поки в архіві */ renderInsights(); renderTeamsTable(); renderMatches();
   }
 
   var lastTabs = '';
@@ -828,16 +827,17 @@
     var html = STAGES.map(function (st) {
       var p = progress(st), live = p.done > 0 && p.done < 33, open = !isClosed(st);
       var tip = live ? 'Йде зараз: зіграно ' + p.done + ' з 33 матчів' : open ? 'Картку ще можна подати' : p.done === 33 ? 'Стадію завершено' : 'Картку закрито';
-      return '<button role="tab" aria-selected="' + (st === state.stage) + '" data-tab="' + st + '" data-tip="' + esc(tip) + '">' +
+      return '<button role="tab" aria-selected="' + (st === state.stage && state.view !== 'league') + '" data-tab="' + st + '" data-tip="' + esc(tip) + '">' +
         (live ? '<span class="d live" aria-hidden="true"></span>' : open ? '<span class="d open" aria-hidden="true"></span>' : '') +
         esc(stageCfg(st).name) + '</button>';
     }).join('');
     var known = progress('stage3').done === 33 || !!(state.po && state.po.bracketKnown), poOpen = known && !isClosed(PO), pp = poProgress();
     var poLive = pp.done > 0 && pp.done < 7 || pp.live;
-    html += '<button role="tab" aria-selected="' + (state.stage === PO) + '" data-tab="' + PO + '" data-tip="' +
+    html += '<button role="tab" aria-selected="' + (state.stage === PO && state.view !== 'league') + '" data-tab="' + PO + '" data-tip="' +
       esc(poLive ? 'Йде плей-оф: зіграно ' + pp.done + ' з 7' : pp.done === 7 ? 'Плей-оф завершено' : known ? (poOpen ? 'Сітка відома — картку ще можна подати' : 'Картку плей-оф закрито')
         : 'Прогноз сітки і шанси команд; справжня сітка — після Stage 3') + '">' +
       (poLive ? '<span class="d live" aria-hidden="true"></span>' : poOpen ? '<span class="d open" aria-hidden="true"></span>' : '') + esc(stageCfg(PO).name) + '</button>';
+    html += '<button role="tab" class="lgtab" aria-selected="' + (state.view === 'league') + '" data-tab="league" data-tip="Ліга з друзями: хто вгадає більше">' + ICON.users + 'Змагання</button>';
     if (html === lastTabs) return;                 // без змін — не чіпаємо (і не збиваємо фокус)
     lastTabs = html;
     $('tabs').innerHTML = html;
@@ -928,7 +928,6 @@
 
   function renderTools() {
     var st = state.stage, closed = isClosed(st), edit = canEdit(st), html = '', n = picksIn(st);
-    html += '<button class="tbtn" data-act="friends" data-tip="Змагання з друзями: хто вгадає більше">' + ICON.users + 'Змагання</button>';
     if (n) html += '<button class="tbtn" data-act="share" data-tip="Картинка або текст картки — щоб надіслати друзям">' + ICON.share + 'Поділитися</button>';
     if (n) html += '<button class="tbtn primary" data-act="save" data-tip="Зберегти картку (вона й так зберігається сама)">Зберегти</button>';
     if (edit && !closed && st !== PO) html += '<button class="tbtn" data-act="random" data-tip="Випадкова картка з команд цієї стадії">' + ICON.shuffle + 'Випадкова</button>';
@@ -2367,7 +2366,8 @@
       '<div class="actions">' + acts + '</div></td></tr>';
   }
 
-  function renderFriends() {
+  function renderFriends() { /* старий блок за посиланнями #join — замінено онлайн-лігою */ }
+  function renderFriendsOld() {
     var el = friendsBox(), st = state.stage, name = stageCfg(st).name;
     if (!el) return;
     if (state.profiles.length < 2) {
@@ -2450,11 +2450,475 @@
     }
     return el;
   }
-  function showFriends() { render(); var el = friendsBox(); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); requestLeague(); }
+  function showFriends() { openLeagueView(); }
+
+  // ======================================== ліга з друзями (онлайн-база Supabase, web/supa.js) ===
+  // Вкладка «Змагання»: створюєш лігу → посилання друзям → друг вводить ім'я, збирає картку й тисне «Зберегти».
+  // До старту стадії картку можна міняти (таймер), після — база не приймає змін. Чужі картки видно після старту.
+  var SUPA = window.CS2P_SUPA || {};
+  var LG_STAGES = STAGES.concat([PO]);
+  var lg = { list: lsJSON('cs2p-lg-list') || [], cur: lsGet('cs2p-lg-cur') || null, data: {}, err: null, loading: false,
+    stage: null, open: null, pending: null, pendingInfo: null, pendingErr: null, creating: false, tick: null, poll: null, busy: false };
+  var lgMe = lsJSON('cs2p-lg-me');
+  var LG_ID = /^[a-f0-9]{10}$/;
+  var LG_ERR = {
+    locked: 'Стадія вже почалась — картку в лізі змінити не можна.',
+    no_league: 'Такої ліги немає — перевір посилання.',
+    name_taken: 'Це ім\'я в лізі вже зайняте — обери інше.',
+    bad_name: 'Ім\'я — від 1 до 24 символів, назва ліги — до 40.',
+    full: 'У лізі вже 30 учасників.',
+    forbidden: 'Не вдалося підтвердити, що це ти. Ліга прив\'язана до браузера, де ти вступав.',
+    busy: 'Забагато нових ліг — спробуй трохи пізніше.',
+    bad_card: 'Картка має дивний вигляд — онови сторінку.'
+  };
+  function lgReady() { return !!(SUPA.url && SUPA.key); }
+  function rndHex(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join(''); }
+  function lgIdentity() {
+    if (!lgMe || !/^[a-f0-9]{18}$/.test(lgMe.uid || '') || !/^[a-f0-9]{48}$/.test(lgMe.secret || '')) {
+      lgMe = { uid: rndHex(9), secret: rndHex(24), name: (lgMe && lgMe.name) || '' };
+      lsSet('cs2p-lg-me', JSON.stringify(lgMe));
+    }
+    return lgMe;
+  }
+  function lgSetName(n) { lgIdentity().name = n; lsSet('cs2p-lg-me', JSON.stringify(lgMe)); }
+  function rpc(fn, args) {
+    if (!lgReady()) return Promise.reject(new Error('Ліга ще не підключена до бази.'));
+    var h = { 'Content-Type': 'application/json', apikey: SUPA.key };
+    if (!/^sb_/.test(SUPA.key)) h.Authorization = 'Bearer ' + SUPA.key;
+    return fetch(SUPA.url.replace(/\/+$/, '') + '/rest/v1/rpc/' + fn, { method: 'POST', headers: h, body: JSON.stringify(args || {}), cache: 'no-store' })
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var j = null;
+          try { j = t ? JSON.parse(t) : null; } catch (e) { /* не JSON */ }
+          if (!r.ok) {
+            var m = String((j && (j.message || j.hint || j.error)) || 'HTTP ' + r.status);
+            var k = Object.keys(LG_ERR).filter(function (x) { return m.indexOf(x) >= 0; })[0];
+            throw new Error(k ? LG_ERR[k] : 'Помилка ліги: ' + m);
+          }
+          return j;
+        });
+      }, function () { throw new Error('Немає зв\'язку з лігою — перевір інтернет.'); });
+  }
+  function lgSaveList() { lsSet('cs2p-lg-list', JSON.stringify(lg.list)); if (lg.cur) lsSet('cs2p-lg-cur', lg.cur); }
+  function lgHas(id) { return lg.list.some(function (x) { return x.id === id; }); }
+  function lgData() { return lg.cur ? lg.data[lg.cur] : null; }
+  function lgNow() { var d = lgData(); return Date.now() + (d && d.skew || 0); }
+  function lgLockAt(st) {
+    var d = lgData(), t = d && d.locks && d.locks[st] ? Date.parse(d.locks[st]) : NaN;
+    if (!isNaN(t)) return t;
+    var c = times(st).lockAt;
+    return c ? c.getTime() : null;
+  }
+  function lgClosed(st) { var t = lgLockAt(st); return t != null && lgNow() >= t; }
+  function lgLink(id) { return shareBase() + '#league=' + id; }
+  function lgCardSame(st, a, b) {
+    function k(c) { c = normFor(st, c); return st === PO ? [c.qf.slice().sort(), c.sf.slice().sort(), c.champion || ''] : SLOT_KEYS.map(function (sl) { return c[sl].slice().sort(); }); }
+    return JSON.stringify(k(a)) === JSON.stringify(k(b));
+  }
+  function lgMine(d) { return d && d.members.filter(function (m) { return m.me; })[0] || null; }
+  function lgPicks(st, c) { c = normFor(st, c); return st === PO ? poPicks(c) : nPicks(c); }
+  function lgTotal(st) { return st === PO ? 7 : 10; }
+  /** Стадія за замовчуванням: та, що йде зараз, інакше найближча відкрита. */
+  function lgDefaultStage() {
+    var live = LG_STAGES.filter(function (st) {
+      if (!lgClosed(st)) return false;
+      if (st === PO) { var pp = poProgress(); return pp.done < 7; }
+      return progress(st).done < 33;
+    })[0];
+    return live || LG_STAGES.filter(function (st) { return !lgClosed(st); })[0] || PO;
+  }
+
+  function lgLoad(id, quiet) {
+    id = id || lg.cur;
+    if (!id || !lgReady()) return Promise.resolve(null);
+    var me = lgIdentity();
+    if (!quiet) { lg.loading = true; renderLeague(); }
+    return rpc('get_league', { p_league: id, p_uid: me.uid, p_secret: me.secret }).then(function (d) {
+      lg.loading = false; lg.err = null;
+      d.skew = Date.parse(d.now) - Date.now();
+      if (!(Math.abs(d.skew) < 864e5)) d.skew = 0;
+      lg.data[id] = d;
+      var item = lg.list.filter(function (x) { return x.id === id; })[0];
+      if (item && item.name !== d.name) { item.name = d.name; lgSaveList(); }
+      if (!lg.stage) lg.stage = lgDefaultStage();
+      requestLeague();
+      renderLeague();
+      return d;
+    }).catch(function (e) { lg.loading = false; lg.err = e.message; renderLeague(); return null; });
+  }
+  /** Зберегти свою картку стадії в лігах (усіх, де я є, або в переданих). */
+  function lgSave(st, ids) {
+    var me = lgIdentity(), card = rawCard(st, 'me');
+    ids = ids || lg.list.map(function (x) { return x.id; });
+    if (!ids.length) return Promise.resolve([]);
+    lg.busy = true; renderLeague();
+    return Promise.all(ids.map(function (id) {
+      return rpc('save_card', { p_league: id, p_uid: me.uid, p_secret: me.secret, p_stage: st, p_card: card })
+        .then(function () { return lgLoad(id, true).then(function () { return { id: id, ok: true }; }); },
+          function (e) { return { id: id, err: e.message }; });
+    })).then(function (rs) { lg.busy = false; renderLeague(); return rs; });
+  }
+  function lgSaveFromLeague() {
+    var st = lg.stage, n = lgPicks(st, rawCard(st, 'me'));
+    if (!n) { toast('Картка ' + stageCfg(st).name + ' порожня — спершу збери її.'); return; }
+    if (lgClosed(st)) { toast(LG_ERR.locked); return; }
+    lgSave(st, [lg.cur]).then(function (rs) {
+      var r = rs[0];
+      if (r && r.err) toast(r.err);
+      else toast('Картку ' + stageCfg(st).name + ' збережено в лізі' + (n < lgTotal(st) ? ' (' + n + '/' + lgTotal(st) + ' піків — можна доповнити до старту)' : '') + '.');
+    });
+  }
+  /** Кнопка «Зберегти» на картці стадії: зберігає й у всіх лігах (поки стадія не почалась). */
+  function lgSaveFromToolbar(st) {
+    if (!lgReady() || !lg.list.length || state.profile !== 'me') return false;
+    if (lgClosed(st)) { toast('Картку збережено для себе. У лізі лишається та, що була до старту ' + stageCfg(st).name + '.'); return true; }
+    lgSave(st).then(function (rs) {
+      var ok = rs.filter(function (r) { return r.ok; }), bad = rs.filter(function (r) { return r.err; });
+      var names = ok.map(function (r) { var x = lg.list.filter(function (l) { return l.id === r.id; })[0]; return '«' + (x ? x.name : r.id) + '»'; });
+      toast(bad.length ? bad[0].err : 'Картку збережено' + (names.length ? ' і в ' + (names.length > 1 ? 'лігах ' : 'лізі ') + names.join(', ') : '') + '.');
+    });
+    return true;
+  }
+
+  function lgCreate(name, myName) {
+    var me = lgIdentity();
+    return rpc('create_league', { p_name: name }).then(function (id) {
+      return rpc('join_league', { p_league: id, p_uid: me.uid, p_secret: me.secret, p_name: myName }).then(function () {
+        lgSetName(myName);
+        lg.list.push({ id: id, name: name }); lg.cur = id; lg.creating = false; lg.stage = null; lg.open = null; lgSaveList();
+        return lgLoad(id).then(function () { lgCopyLink(id, true); });
+      });
+    });
+  }
+  function lgJoin(id, myName) {
+    var me = lgIdentity();
+    return rpc('join_league', { p_league: id, p_uid: me.uid, p_secret: me.secret, p_name: myName }).then(function () {
+      lgSetName(myName);
+      var info = lg.pendingInfo;
+      if (!lgHas(id)) lg.list.push({ id: id, name: info ? info.name : 'Ліга' });
+      lg.cur = id; lg.pending = null; lg.pendingInfo = null; lg.stage = null; lg.open = null; lgSaveList();
+      return lgLoad(id).then(function () { toast('Ти в лізі! Збери картку й натисни «Зберегти».'); });
+    });
+  }
+  function lgOpenInvite(id) {
+    if (!LG_ID.test(id)) { toast(LG_ERR.no_league); return; }
+    state.view = 'league'; lsSet('view', 'league');
+    if (lgHas(id)) { lg.cur = id; lg.pending = null; lgSaveList(); render(); lgLoad(id); return; }
+    lg.pending = id; lg.pendingInfo = null; lg.pendingErr = null;
+    render();
+    rpc('get_league', { p_league: id }).then(function (d) { lg.pendingInfo = d; renderLeague(); })
+      .catch(function (e) { lg.pendingErr = e.message; renderLeague(); });
+  }
+  function lgCopyLink(id, fresh) {
+    var link = lgLink(id || lg.cur), x = lg.list.filter(function (l) { return l.id === (id || lg.cur); })[0];
+    function manual() {
+      openModal('<form><h3>' + (fresh ? 'Лігу створено!' : 'Посилання на лігу') + '</h3><p>Надішли це посилання друзям. Вони введуть ім\'я, зберуть картку й натиснуть «Зберегти».</p>' +
+        '<div class="linkbox"><input readonly value="' + esc(link) + '"></div>' +
+        '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Закрити</button></div></form>', function () { closeModal(); });
+    }
+    if (!navigator.clipboard) return manual();
+    navigator.clipboard.writeText(link).then(function () {
+      toast((fresh ? 'Лігу «' + (x ? x.name : '') + '» створено. ' : '') + 'Посилання скопійовано — встав його в чат друзям.');
+    }).catch(manual);
+  }
+  function lgRenameMe() {
+    var d = lgData(), m = lgMine(d);
+    openModal('<form><h3>Твоє ім\'я в лізі</h3><input name="name" maxlength="24" value="' + esc(m ? m.name : lgIdentity().name) + '" autocomplete="nickname" required>' +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn primary">Зберегти</button></div></form>',
+    function (name) {
+      if (!name) return;
+      var me = lgIdentity();
+      rpc('join_league', { p_league: lg.cur, p_uid: me.uid, p_secret: me.secret, p_name: name }).then(function () {
+        lgSetName(name); closeModal(); lgLoad(lg.cur, true);
+      }).catch(function (e) { toast(e.message); });
+    });
+  }
+  function lgLeave() {
+    var x = lg.list.filter(function (l) { return l.id === lg.cur; })[0];
+    if (!x) return;
+    openModal('<form><h3>Вийти з ліги «' + esc(x.name) + '»?</h3><p>Твою картку буде видалено з таблиці. Повернутись можна за тим самим посиланням.</p>' +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Скасувати</button><button class="btn danger">Вийти</button></div></form>',
+    function () {
+      var me = lgIdentity(), id = lg.cur;
+      rpc('leave_league', { p_league: id, p_uid: me.uid, p_secret: me.secret }).catch(function () { /* і так приберемо зі списку */ }).then(function () {
+        lg.list = lg.list.filter(function (l) { return l.id !== id; }); delete lg.data[id];
+        lg.cur = lg.list.length ? lg.list[0].id : null; lsDel('cs2p-lg-cur'); lgSaveList();
+        closeModal(); render(); if (lg.cur) lgLoad(lg.cur);
+      });
+    });
+  }
+
+  // -------- розрахунок шансів для ліги (той самий фоновий потік, що й раніше) --------
+  function lgCards(st) {
+    var out = {}, d = lgData();
+    if (!d || st === PO) return out;
+    d.members.forEach(function (m) {
+      var c = m.cards && m.cards[st];
+      if (c && lgClosed(st)) { c = normCard(c); if (nPicks(c)) out[m.uid] = c; }
+    });
+    return out;
+  }
+  function lgScore(st, c) {
+    var cnt = { hit: 0, dead: 0, open: 0, n: 0 };
+    if (!c) return cnt;
+    if (st === PO) {
+      c = poNorm(c);
+      c.qf.forEach(function (id) { cnt[poRealStatus('qf', id)]++; });
+      c.sf.forEach(function (id) { cnt[poRealStatus('sf', id)]++; });
+      if (c.champion) cnt[poRealStatus('champion', c.champion)]++;
+      cnt.n = poPicks(c);
+      return cnt;
+    }
+    c = normCard(c);
+    var R = realRecords(st);
+    SLOT_KEYS.forEach(function (sl) { c[sl].forEach(function (id) { cnt[realStatus(R, id, sl)]++; }); });
+    cnt.n = nPicks(c);
+    return cnt;
+  }
+  function lgChips(st, c) {
+    if (st !== PO) {
+      var R = realRecords(st), started = lgClosed(st);
+      return chipsHTML(normCard(c), null, function (id, sl) { if (!started) return null; var s = realStatus(R, id, sl); return s === 'open' ? null : s; });
+    }
+    c = poNorm(c);
+    return '<div class="groups">' + [['qf', 'У півфінал', c.qf], ['sf', 'У фінал', c.sf], ['champion', 'Чемпіон', c.champion ? [c.champion] : []]].map(function (g) {
+      if (!g[2].length) return '';
+      return '<div class="grp"><span class="gl">' + g[1] + '</span><div class="chips">' + g[2].map(function (id) {
+        var s = poRealStatus(g[0], id);
+        return '<span class="chip' + (s !== 'open' ? ' ' + s : '') + '"><span class="cl">' + logoHTML(id, 20) + '</span>' + esc(teamName(id)) + (s === 'hit' ? ICON.check : s === 'dead' ? ICON.x : '') + '</span>';
+      }).join('') + '</div></div>';
+    }).join('') + '</div>';
+  }
+
+  // ------------------------------------------------------------------ вигляд ---
+  function pad2(n) { return (n < 10 ? '0' : '') + n; }
+  function lgTimerText(st) {
+    var L = lgLockAt(st), name = stageCfg(st).name;
+    if (L == null) return '';
+    var ms = L - lgNow();
+    if (ms <= 0) return name + ' почалась — картки зафіксовано, змінити вже не можна.';
+    var s = Math.floor(ms / 1000), d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+    return 'До закриття ' + name + ': ' + (d ? d + ' д ' : '') + pad2(h) + ':' + pad2(m) + ':' + pad2(s % 60);
+  }
+  function lgTick() {
+    if (state.view !== 'league') return;
+    var el = $('lgTimer');
+    if (el) {
+      var t = lgTimerText(lg.stage), closed = lgClosed(lg.stage);
+      el.textContent = t;
+      if (el.dataset.closed !== String(closed)) render();     // щойно закрилась — перемалювати
+    }
+  }
+  function lgStartTimers() {
+    if (!lg.tick) lg.tick = setInterval(lgTick, 1000);
+    if (!lg.poll) lg.poll = setInterval(function () { if (state.view === 'league' && !document.hidden && lg.cur) lgLoad(lg.cur, true); }, 30000);
+  }
+  function openLeagueView() {
+    state.view = 'league'; lsSet('view', 'league');
+    closePicker();
+    if (!lg.cur && lg.list.length) lg.cur = lg.list[0].id;
+    if (!lg.stage) lg.stage = lgDefaultStage();
+    render();
+    window.scrollTo({ top: 0 });
+    if (lg.cur) lgLoad(lg.cur, !!lgData());
+    lgStartTimers();
+  }
+
+  function lgNameField(id, label) {
+    return '<label class="label" for="' + id + '">' + label + '</label><input id="' + id + '" name="' + id + '" maxlength="24" value="' + esc(lgIdentity().name || '') +
+      '" placeholder="Нікнейм, як тебе знають друзі" autocomplete="nickname" required>';
+  }
+  function lgCreateHTML(first) {
+    return '<section class="card lg-form"><h2>' + (first ? 'Змагайся з друзями' : 'Нова ліга') + '</h2>' +
+      (first ? '<p class="hint">Створи лігу, надішли посилання друзям — кожен збере свою картку. Поки стадія не почалась, картку можна міняти; після старту — все зафіксовано, і рахуємо очки: скільки піків зайшло, стільки й очок.</p>' : '') +
+      '<form data-lgform="create" class="lg-fields"><label class="label" for="lgName">Назва ліги</label>' +
+      '<input id="lgName" name="lgName" maxlength="40" placeholder="Наприклад, тест 1" autocomplete="off" required>' + lgNameField('lgMeName', 'Твоє ім\'я') +
+      '<div class="actions"><button class="btn primary"' + (lg.busy ? ' disabled' : '') + '>' + ICON.users + 'Створити лігу</button>' +
+      (!first ? '<button type="button" class="btn quiet" data-act="lg-cancel-new">Скасувати</button>' : '') + '</div></form>' +
+      (first ? '<p class="fine">Друг надіслав посилання? Просто відкрий його — сайт сам запропонує вступити.</p>' : '') + '</section>';
+  }
+  function lgJoinHTML() {
+    var d = lg.pendingInfo;
+    if (lg.pendingErr) return '<section class="card lg-form"><h2>Не вдалося відкрити лігу</h2><p class="hint">' + esc(lg.pendingErr) + '</p>' +
+      '<div class="actions"><button class="btn" data-act="lg-pending-cancel">Закрити</button></div></section>';
+    if (!d) return '<section class="card lg-form"><h2>Відкриваю лігу…</h2><span class="spinner"></span></section>';
+    var n = d.members.length;
+    return '<section class="card lg-form"><h2>Тебе запросили в лігу «' + esc(d.name) + '»</h2>' +
+      '<p class="hint">' + (n ? 'Уже ' + n + ' ' + plural(n, 'учасник', 'учасники', 'учасників') + ': ' + esc(d.members.map(function (m) { return m.name; }).slice(0, 8).join(', ')) + (n > 8 ? '…' : '') + '. ' : '') +
+      'Введи ім\'я, збери картку й натисни «Зберегти». Поки стадія не почалась — картку можна міняти.</p>' +
+      '<form data-lgform="join" class="lg-fields">' + lgNameField('lgJoinName', 'Твоє ім\'я') +
+      '<div class="actions"><button class="btn primary"' + (lg.busy ? ' disabled' : '') + '>Вступити в лігу</button><button type="button" class="btn quiet" data-act="lg-pending-cancel">Не зараз</button></div></form></section>';
+  }
+  function lgStagesHTML() {
+    return '<div class="lg-tabs" role="tablist" aria-label="Стадія ліги">' + LG_STAGES.map(function (st) {
+      var on = st === lg.stage, closed = lgClosed(st);
+      return '<button role="tab" aria-selected="' + on + '" data-lgst="' + st + '">' + (closed ? '' : '<span class="d open" aria-hidden="true"></span>') + esc(stageCfg(st).name) + '</button>';
+    }).join('') + '</div>';
+  }
+  function lgMineHTML(d) {
+    var st = lg.stage, closed = lgClosed(st), mine = lgMine(d), saved = mine && mine.cards && mine.cards[st], local = rawCard(st, 'me');
+    var nLocal = lgPicks(st, local), nSaved = saved ? lgPicks(st, saved) : 0, same = saved && lgCardSame(st, saved, local);
+    var at = mine && mine.saved && mine.saved[st] ? new Date(mine.saved[st]) : null;
+    var status, acts = '';
+    if (closed) {
+      status = nSaved ? 'У лізі зафіксовано твою картку: ' + nSaved + '/' + lgTotal(st) + ' піків.' : 'Ти не зберіг картку до старту — у цій стадії очок не буде.';
+    } else if (!nLocal) {
+      status = 'Картки ще немає. Збери її на вкладці ' + stageCfg(st).name + ' і натисни «Зберегти».';
+      acts = '<button class="btn primary" data-act="lg-edit">Зібрати картку</button>';
+    } else if (same) {
+      status = 'Збережено в лізі' + (at && !isNaN(at) ? ' о ' + fmtWhen(at) : '') + '. До старту ще можна змінити.';
+      acts = '<button class="btn" data-act="lg-edit">Змінити картку</button>';
+    } else {
+      status = saved ? 'Є незбережені зміни — у лізі поки стара версія.' : 'Картку ще не збережено в лізі.';
+      acts = '<button class="btn primary" data-act="lg-save"' + (lg.busy ? ' disabled' : '') + '>Зберегти в лізі</button><button class="btn" data-act="lg-edit">Змінити картку</button>';
+    }
+    var show = closed ? saved : local;
+    return '<section class="card lg-mine"><div class="lg-timer' + (closed ? ' closed' : '') + '" id="lgTimer" data-closed="' + closed + '">' + esc(lgTimerText(st)) + '</div>' +
+      (show && lgPicks(st, show) ? lgChips(st, show) : '') + '<p class="hint lg-status">' + esc(status) + '</p>' +
+      (acts ? '<div class="actions">' + acts + '</div>' : '') + '</section>';
+  }
+  function lgTableHTML(d) {
+    var st = lg.stage, started = lgClosed(st), total = lgTotal(st), probs = started && st !== PO;
+    var cards = probs ? lgCards(st) : null, key = cards && Object.keys(cards).length >= 2 ? leagueKey(st, cards) : null;
+    var L = state.league[st], res = L && L.res && L.key === key ? L.res : null, busy = !!key && !res && !(L && L.err && L.key === key);
+    var rows = d.members.map(function (m, i) {
+      var c = m.cards && m.cards[st], n = (m.picks && m.picks[st]) || 0;
+      return { m: m, c: c, n: n, sc: started && c ? lgScore(st, c) : null, x: res ? res.players[m.uid] : null, i: i };
+    });
+    rows.sort(function (a, b) {
+      if (started) return ((b.sc ? b.sc.hit : -1) - (a.sc ? a.sc.hit : -1)) || ((b.x ? b.x.eK : 0) - (a.x ? a.x.eK : 0)) || a.i - b.i;
+      return (b.n - a.n) || a.i - b.i;
+    });
+    var cols = probs ? 5 : 3, prev = null, pos = 0;
+    var head = '<thead><tr><th>#</th><th>Гравець</th><th>' + (started ? 'Очки' : 'Картка') + '</th>' +
+      (probs ? '<th class="r hide-m" data-tip="Шанс, що в картці зайде 5 або більше піків">Шанс 5+</th><th class="r" data-tip="Частка симуляцій, у яких цей гравець набирає найбільше очок">Буде першим</th>' : '') + '</tr></thead>';
+    var body = rows.map(function (r, i) {
+      var val = started ? (r.sc ? r.sc.hit : -1) : r.n;
+      if (val !== prev) { pos = i + 1; prev = val; }
+      var open = lg.open === r.m.uid, cell;
+      if (started) cell = !r.sc || !r.sc.n ? '<span class="muted">не зберіг картку</span>' :
+        '<span class="score"><span class="pts">' + r.sc.hit + '</span><span class="ok">✓ ' + r.sc.hit + '</span><span class="no">✗ ' + r.sc.dead + '</span>' + (r.sc.open ? '<span class="op">' + r.sc.open + ' у грі</span>' : '') + '</span>';
+      else cell = !r.n ? '<span class="muted">ще не зберіг</span>' : r.n < total ? '<span class="muted">' + r.n + '/' + total + ' піків</span>' : '<span class="ready">' + ICON.check + 'картка готова</span>';
+      var html = '<tr class="row' + (r.m.me ? ' me' : '') + (open ? ' open' : '') + '" data-lgrow="' + esc(r.m.uid) + '" tabindex="0" aria-expanded="' + open + '">' +
+        '<td class="pos' + (pos === 1 && started && r.sc && r.sc.hit ? ' first' : '') + '">' + (started ? (r.sc && r.sc.n ? pos : '') : '') + '</td>' +
+        '<td><div class="who"><span class="av" style="background:' + PROFILE_COLORS[r.i % PROFILE_COLORS.length] + '">' + esc(initial(r.m.name)) + '</span><span class="nm">' + esc(r.m.name) + (r.m.me ? '<small>це ти</small>' : '') + '</span></div></td>' +
+        '<td>' + cell + '</td>';
+      if (probs) html += '<td class="r hide-m">' + (r.x ? '<span class="big">' + fmtPct(r.x.p5) + '</span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>' +
+        '<td class="r">' + (r.x ? '<span class="big">' + fmtPct(r.x.pFirst) + '</span><span class="bar"><i style="width:' + Math.min(100, r.x.pFirst * 100).toFixed(1) + '%"></i></span>' : r.sc && r.sc.n ? (busy ? '…' : '—') : '') + '</td>';
+      html += '</tr>';
+      if (open) {
+        var det = r.c && lgPicks(st, r.c) ? lgChips(st, r.c) : '<p class="hint">' + (!started && !r.m.me ? (r.n ? 'Картку друга покажемо, коли ' + esc(stageCfg(st).name) + ' почнеться — щоб ніхто не списував.' : 'Ще не зберіг картку.') : 'Картки немає.') + '</p>';
+        var at = r.m.saved && r.m.saved[st] ? new Date(r.m.saved[st]) : null;
+        html += '<tr class="det"><td colspan="' + cols + '">' + det + (at && !isNaN(at) ? '<p class="fine">Збережено ' + fmtWhen(at) + '</p>' : '') + '</td></tr>';
+      }
+      return html;
+    }).join('');
+    var hint = started ? (st === PO ? 'Очки — скільки піків плей-оф зайшло (з 7).' : 'Очки — скільки піків зайшло: 6 зайшло — 6 очок. Шанси — за ' + LEAGUE_SIMS.toLocaleString('uk-UA') + ' симуляціями решти матчів.')
+      : 'Чужі картки відкриються, коли ' + stageCfg(st).name + ' почнеться. Поки видно лише, хто вже зберіг.';
+    var note = probs && !key && rows.filter(function (r) { return r.sc && r.sc.n; }).length < 2 ? '' : L && L.err && L.key === key ? '<p class="fine">Помилка розрахунку: ' + esc(L.err) + '</p>' : '';
+    return '<section class="card"><div class="card-h"><h2>Таблиця · ' + esc(stageCfg(st).name) + '</h2>' + (busy ? '<span class="spinner" title="Рахую шанси"></span>' : '') + '</div>' +
+      '<p class="hint">' + esc(hint) + ' Натисни на рядок, щоб побачити піки.</p>' +
+      '<div class="table-wrap"><table class="lb' + (busy ? ' is-stale' : '') + '"><caption class="sr">Ліга, ' + esc(stageCfg(st).name) + '</caption>' + head + '<tbody>' + body + '</tbody></table></div>' + note + '</section>';
+  }
+  function lgTotalHTML(d) {
+    var sts = LG_STAGES.filter(function (st) { return lgClosed(st); });
+    if (!sts.length) return '';
+    var rows = d.members.map(function (m, i) {
+      var per = sts.map(function (st) { var c = m.cards && m.cards[st]; return c ? lgScore(st, c).hit : null; });
+      return { m: m, i: i, per: per, sum: per.reduce(function (a, b) { return a + (b || 0); }, 0) };
+    }).sort(function (a, b) { return (b.sum - a.sum) || a.i - b.i; });
+    var prev = null, pos = 0;
+    return '<section class="card tot"><h2>Загальний залік</h2><p class="hint">Сума очок за всі стадії, що вже почались.</p><div class="table-wrap"><table class="lb">' +
+      '<thead><tr><th>#</th><th>Гравець</th>' + sts.map(function (st) { return '<th class="r">' + esc(stageCfg(st).name) + '</th>'; }).join('') + '<th class="r">Разом</th></tr></thead><tbody>' +
+      rows.map(function (r, i) {
+        if (r.sum !== prev) { pos = i + 1; prev = r.sum; }
+        return '<tr class="' + (r.m.me ? 'me' : '') + '"><td class="pos' + (pos === 1 && r.sum ? ' first' : '') + '">' + pos + '</td><td><div class="who"><span class="av" style="background:' +
+          PROFILE_COLORS[r.i % PROFILE_COLORS.length] + '">' + esc(initial(r.m.name)) + '</span><span class="nm">' + esc(r.m.name) + '</span></div></td>' +
+          r.per.map(function (v) { return '<td class="r cell">' + (v == null ? '<span class="muted">—</span>' : v) + '</td>'; }).join('') +
+          '<td class="r"><span class="big">' + r.sum + '</span></td></tr>';
+      }).join('') + '</tbody></table></div></section>';
+  }
+  function renderLeague() {
+    var el = $('leagueView');
+    if (!el || state.view !== 'league') return;
+    var a = document.activeElement;
+    if (a && el.contains(a) && (a.tagName === 'INPUT' || a.tagName === 'SELECT') && a.value) return;   // не збиваємо введення
+    if (!lgReady()) {
+      el.innerHTML = '<section class="card lg-form"><h2>Змагання</h2><p class="hint">Ліга ще не підключена до онлайн-бази. Скоро запрацює.</p></section>';
+      return;
+    }
+    if (!lg.stage) lg.stage = lgDefaultStage();
+    var html = '';
+    if (lg.pending && !lgHas(lg.pending)) html = lgJoinHTML();
+    else if (!lg.list.length || lg.creating) html = lgCreateHTML(!lg.list.length);
+    else {
+      if (!lg.cur || !lgHas(lg.cur)) lg.cur = lg.list[0].id;
+      var d = lgData(), x = lg.list.filter(function (l) { return l.id === lg.cur; })[0];
+      var pick = lg.list.length > 1 ? '<select id="lgSelect" aria-label="Ліга">' + lg.list.map(function (l) {
+        return '<option value="' + esc(l.id) + '"' + (l.id === lg.cur ? ' selected' : '') + '>' + esc(l.name) + '</option>';
+      }).join('') + '</select>' : '';
+      var mine = lgMine(d);
+      html = '<section class="card lg-top"><div class="card-h"><h2>' + ICON.users + esc(d ? d.name : x.name) + '</h2>' + pick +
+        '<button class="btn primary" data-act="lg-copy">' + ICON.link + 'Запросити друзів</button>' +
+        '<button class="btn quiet" data-act="lg-new">+ Нова ліга</button></div>' +
+        '<p class="hint">' + (d ? d.members.length + ' ' + plural(d.members.length, 'учасник', 'учасники', 'учасників') : '') +
+        (mine ? ' · ти — <b>' + esc(mine.name) + '</b> <button class="linkbtn" data-act="lg-rename">змінити ім\'я</button>' : '') +
+        ' · <button class="linkbtn" data-act="lg-leave">вийти з ліги</button></p></section>';
+      if (!d) html += lg.err ? '<section class="card"><p class="hint">' + esc(lg.err) + '</p><div class="actions"><button class="btn" data-act="lg-reload">Спробувати ще</button></div></section>'
+        : '<section class="card"><span class="spinner"></span></section>';
+      else {
+        if (!mine) html += '<section class="card"><p class="hint">Тебе немає серед учасників цієї ліги (можливо, вступав з іншого браузера). Відкрий посилання ліги ще раз, щоб вступити.</p></section>';
+        html += lgStagesHTML() + (mine ? lgMineHTML(d) : '') + lgTableHTML(d) + lgTotalHTML(d);
+        if (lg.err) html += '<p class="fine">' + esc(lg.err) + '</p>';
+      }
+    }
+    el.innerHTML = html;
+  }
+
+  function lgSubmit(form) {
+    var kind = form.dataset.lgform;
+    if (kind === 'create') {
+      var name = form.lgName.value.replace(/\s+/g, ' ').trim(), me = form.lgMeName.value.replace(/\s+/g, ' ').trim();
+      if (!name || !me) return;
+      lg.busy = true; form.querySelector('button.primary').disabled = true;
+      lgCreate(name, me).catch(function (e) { toast(e.message); }).then(function () { lg.busy = false; if (document.activeElement) document.activeElement.blur(); render(); });
+    } else if (kind === 'join') {
+      var nm = form.lgJoinName.value.replace(/\s+/g, ' ').trim();
+      if (!nm) return;
+      lg.busy = true; form.querySelector('button.primary').disabled = true;
+      lgJoin(lg.pending, nm).catch(function (e) { toast(e.message); }).then(function () { lg.busy = false; if (document.activeElement) document.activeElement.blur(); render(); });
+    }
+  }
+  function lgClick(el, act) {
+    if (el.dataset.lgst) { lg.stage = el.dataset.lgst; lg.open = null; requestLeague(); renderLeague(); return true; }
+    if (el.dataset.lgrow && !act) { lg.open = lg.open === el.dataset.lgrow ? null : el.dataset.lgrow; keepFocus(renderLeague); return true; }
+    switch (act) {
+      case 'lg-copy': lgCopyLink(); return true;
+      case 'lg-new': lg.creating = true; renderLeague(); var f = $('lgName'); if (f) f.focus(); return true;
+      case 'lg-cancel-new': lg.creating = false; renderLeague(); return true;
+      case 'lg-save': lgSaveFromLeague(); return true;
+      case 'lg-edit': if (state.profile !== 'me') switchProfile('me'); switchStage(lg.stage); window.scrollTo({ top: 0 }); return true;
+      case 'lg-rename': lgRenameMe(); return true;
+      case 'lg-leave': lgLeave(); return true;
+      case 'lg-reload': lgLoad(lg.cur); return true;
+      case 'lg-pending-cancel': lg.pending = null; lg.pendingInfo = null; lg.pendingErr = null; render(); return true;
+    }
+    return false;
+  }
+  document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f && f.dataset && f.dataset.lgform) { e.preventDefault(); lgSubmit(f); }
+  });
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'lgSelect') { lg.cur = e.target.value; lg.open = null; lgSaveList(); e.target.blur(); render(); lgLoad(lg.cur); }
+  });
+  document.addEventListener('visibilitychange', function () { if (!document.hidden && state.view === 'league' && lg.cur) lgLoad(lg.cur, true); });
 
   // ---------------------------------------------------------- перемикання ---
   function switchStage(st) {
-    if (st === state.stage) return;
+    var fromLeague = state.view === 'league';
+    if (fromLeague) { state.view = null; lsSet('view', ''); }
+    if (st === state.stage) { if (fromLeague) { render(); window.scrollTo({ top: 0 }); } return; }
     state.stage = st; lsSet('stage', st); state.leagueOpen = null; requestLeague();
     state.showVariants = false; state.showAllRoot = false;
     closePicker();
@@ -2524,10 +2988,11 @@
   document.addEventListener('click', function (e) {
     if (!modalEl.hidden && e.target === modalEl) { closeModal(); return; }
     if (!pickerEl.hidden && !pickerEl.contains(e.target) && !(pickerAnchor && pickerAnchor.contains(e.target))) closePicker();
-    var el = e.target.closest('[data-lrow],[data-tab],[data-act],[data-prof],[data-pick-team],[data-place],[data-copy-from],[data-cell],[data-wi],[data-po],.tcard,.pchip');
+    var el = e.target.closest('[data-lgst],[data-lgrow],[data-lrow],[data-tab],[data-act],[data-prof],[data-pick-team],[data-place],[data-copy-from],[data-cell],[data-wi],[data-po],.tcard,.pchip');
     if (!el || el.disabled) return;
     var st = state.stage, act = el.dataset.act;
-    if (el.dataset.tab) return switchStage(el.dataset.tab);
+    if (el.dataset.tab) return el.dataset.tab === 'league' ? openLeagueView() : switchStage(el.dataset.tab);
+    if (lgClick(el, act)) return;
     if (act === 'profile-menu') { e.stopPropagation(); return profileMenu(el); }
     if (el.dataset.prof && !act) return switchProfile(el.dataset.prof);
     if (el.dataset.pickTeam) { closePicker(); return placeAt(el.dataset.pickTeam, el.dataset.slot, +el.dataset.i); }
@@ -2568,6 +3033,7 @@
     if (act === 'save') {
       var k = pk(st, state.profile);
       clearTimeout(saveTimers[k]); saveNow(st, state.profile);
+      if (lgSaveFromToolbar(st)) return;
       return toast('Картку збережено' + (STATIC ? ' у цьому браузері' : '') + '.');
     }
     if (act === 'random') return randomCard();
@@ -2605,7 +3071,7 @@
       e.preventDefault(); var u = toastUndo; hideToast(); u(); return;
     }
     var el = e.target;
-    if ((e.key === 'Enter' || e.key === ' ') && el.dataset && el.dataset.lrow && el.tagName !== 'BUTTON') { e.preventDefault(); el.click(); return; }
+    if ((e.key === 'Enter' || e.key === ' ') && el.dataset && (el.dataset.lrow || el.dataset.lgrow) && el.tagName !== 'BUTTON') { e.preventDefault(); el.click(); return; }
     if ((e.key === 'Enter' || e.key === ' ') && el.classList && el.classList.contains('tcard') && el.tagName !== 'BUTTON') {
       e.preventDefault(); el.click();
     }
@@ -2685,6 +3151,8 @@
 
   // ---------------------------------------------------------------- старт ---
   window.addEventListener('hashchange', function () {
+    var lid = (location.hash.match(/[#&]league=([a-f0-9]{10})/) || [])[1];
+    if (lid) { history.replaceState(null, '', location.href.replace(/#.*$/, '')); return lgOpenInvite(lid); }
     var t = League.tokenFrom(location.hash);
     if (t) { history.replaceState(null, '', location.href.replace(/#.*$/, '')); importToken(t); }
   });
@@ -2693,6 +3161,9 @@
   loadMe();
   // Посилання від друга (…#join=…): прибираємо його з адресного рядка й пропонуємо додати після завантаження.
   (function () { var t = League.tokenFrom(location.hash); if (t) { pendingJoin = t; history.replaceState(null, '', location.href.replace(/#.*$/, '')); } })();
+  var lgStartId = (location.hash.match(/[#&]league=([a-f0-9]{10})/) || [])[1] || null;
+  if (lgStartId) history.replaceState(null, '', location.href.replace(/#.*$/, ''));
+  else if (lsGet('view') === 'league') state.view = 'league';
   STAGES.forEach(function (st) { var f = lsJSON('fit-' + st); if (f && f.key && f.deltas) state.fit[st] = f; });
   (function () { var fl = lsJSON('flags'); if (fl) state.flags = { ai: fl.ai !== false, exp: fl.exp !== false }; })();
   $('refreshBtn').innerHTML = ICON.refresh;
@@ -2716,7 +3187,8 @@
     scheduleProfileStats();
     requestInsights(state.stage, true);
     STAGES.forEach(function (st) { if (st !== state.stage) requestInsights(st, false); });
-    requestLeague();
+    if (lgStartId) lgOpenInvite(lgStartId);
+    else if (state.view === 'league') openLeagueView();
     if (pendingJoin) { var t = pendingJoin; pendingJoin = null; importToken(t); }
   }).catch(function (e) {
     $('alerts').innerHTML = '<div class="alert critical"><span class="ai">!</span><span>Не вдалося завантажити сторінку: ' + esc(e && e.message || e) + '</span></div>';

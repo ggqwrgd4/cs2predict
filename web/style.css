@@ -677,3 +677,30 @@ details.sub > :not(summary) { margin-top: 8px; }
   .lb .hide-m { display: none; }
   .lb td, .lb th { padding-left: 6px; padding-right: 6px; }
 }
+
+/* ---------------------------------------------------------------- ліга з друзями (онлайн) --- */
+.seg .lgtab svg { width: 15px; height: 15px; flex: none; }
+.lgview { margin: 8px 0 16px; display: flex; flex-direction: column; gap: 16px; }
+.lgview h2 { display: flex; align-items: center; gap: 8px; }
+.lgview h2 svg { width: 20px; height: 20px; color: var(--accent); flex: none; }
+.lg-form { max-width: 560px; }
+.lg-fields { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.lg-fields .label { margin-top: 6px; }
+.lg-fields input, #lgSelect { height: 42px; border-radius: 11px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); padding: 0 12px; font: inherit; font-size: 15px; }
+#lgSelect { height: 36px; font-size: 14px; max-width: 220px; }
+.lg-fields .actions { margin-top: 12px; }
+.lg-fields .actions .btn, .lg-mine .actions .btn, .lg-top .btn { flex: none; }
+.lg-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.lg-tabs button { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 7px; }
+.lg-tabs button:hover { color: var(--ink); background: var(--hover); }
+.lg-tabs button[aria-selected="true"] { background: var(--accent); border-color: transparent; color: #fff; }
+.lg-tabs .d { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.lg-tabs button[aria-selected="true"] .d { background: #fff; }
+.lg-timer { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; margin-bottom: 12px; }
+.lg-timer.closed { font-size: 15px; font-weight: 700; color: var(--ink-2); }
+.lg-status { margin-top: 12px; }
+.lg-mine .actions { margin-top: 12px; }
+.linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.lb .score .pts { display: inline-grid; place-items: center; min-width: 28px; height: 26px; padding: 0 6px; border-radius: 8px; background: var(--accent-wash); color: var(--ink); font-weight: 800; font-size: 15px; }
+.lb .ready { display: inline-flex; align-items: center; gap: 5px; color: var(--good-text); font-weight: 600; }
+.lb .ready svg { width: 14px; height: 14px; }
