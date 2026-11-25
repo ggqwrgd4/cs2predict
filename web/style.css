@@ -191,10 +191,10 @@ button, input { font: inherit; color: inherit; }
 .tcard .lg { width: 74px; height: 74px; flex: none; }
 .tcard .tn { font-weight: 700; font-size: 16px; line-height: 1.15; color: var(--ink); word-break: break-word; }
 .tcard .tp { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: -4px; }
-.tcard .x { position: absolute; top: 7px; left: 7px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--muted);
+.tcard .x { position: absolute; z-index: 1; top: 7px; left: 7px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--surface-2); color: var(--muted);
   display: grid; place-items: center; cursor: pointer; opacity: .9; }
 .tcard .x:hover { background: var(--surface-3); color: var(--ink); }
-.tcard .st { position: absolute; top: 7px; right: 7px; height: 22px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;
+.tcard .st { position: absolute; z-index: 1; top: 7px; right: 7px; height: 22px; padding: 0 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px;
   font-size: 11.5px; font-weight: 700; background: var(--surface-2); color: var(--ink); }
 .tcard .st.hit { background: var(--good-wash); }
 .tcard .st.hit svg { color: var(--good); }
@@ -425,6 +425,11 @@ button, input { font: inherit; color: inherit; }
   .seg .lgtab svg { display: none; }
   .seg button { padding: 0 3px; gap: 4px; font-size: 12px; }
   .seg .d { width: 5px; height: 5px; }
+}
+@media (max-width: 359px) {
+  .seg { gap: 0; }
+  .seg button { padding: 0 2px; gap: 3px; font-size: 11px; }
+  .seg .d { width: 4px; height: 4px; }
 }
 @media (max-width: 720px) {
   .page { padding: 20px 16px 8px; }
@@ -734,23 +739,29 @@ details.sub > :not(summary) { margin-top: 8px; }
 @keyframes to-free { from { opacity: .28; transform: scale(.82); } }
 @keyframes modal-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
 @keyframes picker-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+@keyframes move-from { from { transform: translate(var(--dx, 0px), var(--dy, 0px)); } }
+@keyframes boot-show { from { opacity: 0; } to { opacity: 1; } }
 @keyframes live-ring { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } to { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); } }
 
+/* до першого рендера розділи приховані (app.js знімає .booting); запобіжник — показати через 4 с у будь-якому разі */
+.page.booting > .stagehead, .page.booting > .toolbar, .page.booting #swissView > *, .page.booting > #poView, .page.booting > #leagueView {
+  opacity: 0; animation: boot-show .3s ease-out 4s both; }
 /* поява сторінки та розділів по черзі */
 .page.enter > .stagehead, .page.enter > .toolbar, .page.enter #swissView > *, .page.enter > #poView, .page.enter > #leagueView {
   animation: fade-up .45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
-.swap-in, .fade-in { animation: fade-in .35s ease-out; }
+.swap-in, .fade-in { animation: fade-in .35s ease-out; animation-delay: var(--ad, 0ms); }
 .fold-in { animation: fade-up .3s cubic-bezier(.2, .7, .2, 1); }
 
-/* картки в слотах */
-.tcard.pop { animation: pop-in .42s cubic-bezier(.2, .9, .3, 1.35) both; animation-delay: calc(var(--i, 0) * 40ms); }
-.tcard.deal { animation: deal-in .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
-.tcard.just-dead { animation: shake .45s ease-in-out; }
-.tcard.just-hit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; animation: ring-out .9s ease-out; }
-.tcard.just-hit .st { animation: pop-in .45s cubic-bezier(.2, .9, .3, 1.35); }
+/* картки в слотах (--ad — коли app.js продовжує анімацію після перемальовування) */
+.tcard.pop { animation: pop-in .42s cubic-bezier(.2, .9, .3, 1.35) both; animation-delay: var(--ad, calc(var(--i, 0) * 40ms)); }
+.tcard.deal { animation: deal-in .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: var(--ad, calc(var(--i, 0) * 35ms)); }
+.tcard.move { z-index: 2; animation: move-from .38s cubic-bezier(.2, .7, .2, 1) both; animation-delay: var(--ad, 0ms); }
+.tcard.just-dead { animation: shake .45s ease-in-out; animation-delay: var(--ad, 0ms); }
+.tcard.just-hit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; animation: ring-out .9s ease-out; animation-delay: var(--ad, 0ms); }
+.tcard.just-hit .st { animation: pop-in .45s cubic-bezier(.2, .9, .3, 1.35); animation-delay: var(--ad, 0ms); }
 .tcard:not(.ro):active { transform: scale(.97); }
-.logo.to-used { animation: to-used .4s ease-out; }
-.logo.to-free { animation: to-free .4s ease-out; }
+.logo.to-used { animation: to-used .4s ease-out; animation-delay: var(--ad, 0ms); }
+.logo.to-free { animation: to-free .4s ease-out; animation-delay: var(--ad, 0ms); }
 
 /* кільце шансу і стовпчики розподілу */
 .gauge .g-val { transition: stroke-dasharray .75s cubic-bezier(.2, .7, .2, 1); }

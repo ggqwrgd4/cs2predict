@@ -821,17 +821,42 @@
   // ------------------------------------------------------------ анімації ---
   // Сторінка перемальовується через innerHTML, тож анімуємо лише ЗМІНИ: порівнюємо з тим, що було
   // показано минулого разу (motion), і вішаємо одноразові класи. «Зменшити рух» у системі вимикає все.
-  var motion = { slots: null, ctx: null, used: null, usedCtx: null, gauge: null, gShown: null, countId: 0, dist: null, tabX: null, lgPts: {}, enterT: 0 };
+  var motion = { slots: null, ctx: null, ids: null, fly: {}, used: null, usedCtx: null, poolFly: {}, gauge: null, gShown: null, countId: 0, dist: null, tabX: null, lgPts: {}, enterT: 0 };
   var G_C = 2 * Math.PI * 62, G_ARC = G_C * 0.75;
+  // Тривалість і крок затримки одноразових анімацій, мс (ті самі числа, що в style.css).
+  var ANIM = { pop: [420, 40], deal: [400, 35], move: [380, 0], 'fade-in': [350, 0], 'just-hit': [900, 0], 'just-dead': [450, 0], 'to-used': [400, 0], 'to-free': [400, 0] };
   function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
-  function replay(el, cls, i) {
+  /** Запускає одноразову анімацію класом cls; i — номер у «хвилі», ad — власна затримка в мс (може бути від'ємною). */
+  function replay(el, cls, i, ad) {
     if (!el || reduced()) return;
     if (i != null) el.style.setProperty('--i', i);
+    if (ad != null) el.style.setProperty('--ad', Math.round(ad) + 'ms'); else el.style.removeProperty('--ad');
     el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
     el.addEventListener('animationend', function done(e) {
       if (e.target !== el) return;
       el.classList.remove(cls); el.removeEventListener('animationend', done);
     });
+  }
+  /** Запис про анімацію, що йде: щоб продовжити її, якщо наступний рендер перебудує елемент. */
+  function flight(cls, i, t, extra) {
+    var a = ANIM[cls] || [400, 0], f = { cls: cls, t0: t, delay: (i || 0) * a[1], dur: a[0], i: i };
+    for (var k in extra || {}) f[k] = extra[k];
+    return f;
+  }
+  function launch(el, f) {
+    if (f.dx != null) { el.style.setProperty('--dx', f.dx + 'px'); el.style.setProperty('--dy', f.dy + 'px'); }
+    replay(el, f.cls, f.i);
+  }
+  /** Продовжує перервану перебудовою DOM анімацію з того ж місця; true — якщо вона ще триває. */
+  function carry(el, f, t) {
+    if (!el || !f || reduced()) return false;
+    var gone = t - f.t0;
+    if (gone >= f.delay + f.dur) return false;
+    if (!el.classList.contains(f.cls)) {          // елемент новий — запускаємо з поправкою на час, що минув
+      if (f.dx != null) { el.style.setProperty('--dx', f.dx + 'px'); el.style.setProperty('--dy', f.dy + 'px'); }
+      replay(el, f.cls, null, f.delay - gone);
+    }
+    return true;
   }
   /** innerHTML лише якщо розмітка справді змінилась — щоб не перезапускати анімації без потреби. */
   function setHTML(el, html) { if (el._h === html) return false; el._h = html; el.innerHTML = html; return true; }
@@ -839,8 +864,9 @@
 
   /** Плавна поява розділів сторінки — при відкритті, зміні стадії чи вкладки «Змагання». */
   function playEnter() {
-    if (reduced()) return;
     var page = document.querySelector('.page');
+    page.classList.remove('booting');                // до першого рендера розділи приховані (без «блимання» заготовки)
+    if (reduced()) return;
     var els = [].slice.call(document.querySelectorAll('.page > .stagehead, .page > .toolbar, #swissView > *, .page > #poView, .page > #leagueView'))
       .filter(function (e) { return !e.hidden && e.offsetParent !== null; });
     els.forEach(function (e, i) { e.style.setProperty('--i', Math.min(i, 8)); });
@@ -849,30 +875,55 @@
     motion.enterT = setTimeout(function () { page.classList.remove('enter'); }, 1100);
   }
 
-  /** Слоти картки: нова команда «вискакує», інший профіль — картки «роздаються», зайшов/згорів — спалах. */
-  function boardMotion() {
-    var st = state.stage, ctx = st + '|' + state.profile, prev = motion.slots, now = {}, k = 0;
+  /** Позиції карток до перемальовування — щоб команда, яка змінила місце, плавно «переїхала». */
+  function boardRects(st, c) {
+    var ids = SLOT_KEYS.map(function (sl) { return c[sl].join(','); }).join('|'), changed = ids !== motion.ids;
+    motion.ids = ids;
+    if (!changed || reduced() || motion.ctx !== st + '|' + state.profile || $('swissView').hidden) return null;
+    var out = {};
+    [].forEach.call(document.querySelectorAll('#board .tcard[data-team]'), function (el) {
+      var r = el.getBoundingClientRect();
+      if (r.width) out[el.getAttribute('data-team')] = r;          // прихована картка (інша вкладка) — без «переїзду»
+    });
+    return out;
+  }
+  /** Слоти картки: нова команда «вискакує», переставлена — переїжджає, інший профіль — картки «роздаються»,
+   *  щойно зайшов/згорів — спалах. Статус без результатів симуляції невідомий, тож його поява — не «новина». */
+  function boardMotion(before) {
+    var st = state.stage, ctx = st + '|' + state.profile, prev = motion.slots, now = {}, k = 0, t = performance.now();
     var same = !!prev && motion.ctx === ctx, deal = !!prev && !same && !!motion.ctx && motion.ctx.split('|')[0] === st;
+    var known = !!state.res[st], fly = same ? motion.fly : {}, next = {}, had = {};
+    if (same) Object.keys(prev).forEach(function (q) { var x = prev[q].split('|')[0]; if (x) had[x] = 1; });
     [].forEach.call(document.querySelectorAll('#board .tcard[data-slot]'), function (el) {
       var key = el.getAttribute('data-slot') + el.getAttribute('data-i'), id = el.getAttribute('data-team') || '';
       var s = el.classList.contains('hit') ? 'hit' : el.classList.contains('dead') ? 'dead' : 'open', p = (prev && prev[key] || '|').split('|');
-      now[key] = id + '|' + s;
-      if (!id) { if (same && p[0]) replay(el, 'fade-in'); return; }
-      if (deal) replay(el, 'deal', k++);
-      else if (same && p[0] !== id) replay(el, 'pop', k++);
-      else if (same && p[1] !== s && s !== 'open') replay(el, s === 'hit' ? 'just-hit' : 'just-dead');
+      now[key] = id + '|' + (known ? s : '');
+      var f = null;
+      if (deal) { if (id) f = flight('deal', k++, t); }
+      else if (!same) return;
+      else if (!id) { if (p[0]) f = flight('fade-in', 0, t); }
+      else if (p[0] !== id) {
+        var r0 = had[id] && before && before[id], r1 = r0 && el.getBoundingClientRect();
+        var dx = r0 ? Math.round(r0.left - r1.left) : 0, dy = r0 ? Math.round(r0.top - r1.top) : 0;
+        f = r0 && Math.abs(dx) + Math.abs(dy) > 1 ? flight('move', 0, t, { dx: dx, dy: dy }) : had[id] ? null : flight('pop', k++, t);
+      }
+      else if (known && p[1] && p[1] !== s && s !== 'open') f = flight(s === 'hit' ? 'just-hit' : 'just-dead', 0, t);
+      if (f) { f.id = id; next[key] = f; launch(el, f); }
+      else if (fly[key] && fly[key].id === id && carry(el, fly[key], t)) next[key] = fly[key];
     });
-    motion.slots = now; motion.ctx = ctx;
+    motion.slots = now; motion.ctx = ctx; motion.fly = next;
   }
   /** Ряд команд: значок команди, яку щойно поставили в картку, плавно тьмяніє (і навпаки). */
   function poolMotion() {
-    var ctx = state.stage + '|' + state.profile, prev = motion.usedCtx === ctx ? motion.used : null, now = {};
+    var ctx = state.stage + '|' + state.profile, same = motion.usedCtx === ctx, prev = same ? motion.used : null, now = {}, t = performance.now();
+    var fly = same ? motion.poolFly : {}, next = {};
     [].forEach.call(document.querySelectorAll('#pool .pchip'), function (el) {
-      var id = el.getAttribute('data-team'), u = el.classList.contains('used');
+      var id = el.getAttribute('data-team'), u = el.classList.contains('used'), logo = el.querySelector('.logo'), cls = u ? 'to-used' : 'to-free';
       now[id] = u;
-      if (prev && id in prev && prev[id] !== u) replay(el.querySelector('.logo'), u ? 'to-used' : 'to-free');
+      if (prev && id in prev && prev[id] !== u) { next[id] = flight(cls, 0, t); launch(logo, next[id]); }
+      else if (fly[id] && fly[id].cls === cls && carry(logo, fly[id], t)) next[id] = fly[id];
     });
-    motion.used = now; motion.usedCtx = ctx;
+    motion.used = now; motion.usedCtx = ctx; motion.poolFly = next;
   }
   /** Кільце шансу заповнюється від попереднього значення (або від нуля), число «докручується». */
   function gaugeMotion(p, n, ctx) {
@@ -1021,7 +1072,7 @@
     else if (p.done > 0) { txt = 'Наживо · зіграно ' + p.done + ' з 33'; cls += ' live'; }
     else txt = 'Картку закрито';
     pill.className = cls; pill.hidden = false;
-    pill.innerHTML = '<span class="pd" aria-hidden="true"></span>' + esc(txt);
+    setHTML(pill, '<span class="pd" aria-hidden="true"></span>' + esc(txt));
 
     var prevName = st === 'stage1' ? '' : stageCfg(STAGES[STAGES.indexOf(st) - 1]).name, sub;
     if (st === 'stage1') sub = '16 команд · Swiss · Bo1, а матчі на вихід і виліт — Bo3';
@@ -1093,13 +1144,13 @@
     var st = state.stage, c = cardOf(st), edit = canEdit(st), el = $('pool');
     var teams = stageTeams(st).filter(function (t) { return t.pIn == null || t.pIn > 0.001; });
     el.classList.toggle('ro', !edit);
-    el.innerHTML = teams.map(function (t) {
+    setHTML(el, teams.map(function (t) {
       var used = !!slotOf(c, t.id);
       var tip = t.name + (t.p30 != null ? ' · 3:0 ' + fmtPct(t.p30) + ' · 3:1/3:2 ' + fmtPct(t.adv) + ' · 0:3 ' + fmtPct(t.p03) : '') +
         (t.pIn != null && t.pIn < 0.999 ? ' · у стадії ' + fmtPct(t.pIn) : '') + (used ? ' · уже в картці' : '');
       return '<button class="pchip' + (used ? ' used' : '') + '" data-team="' + esc(t.id) + '"' + (edit ? ' draggable="true"' : '') +
         ' data-tip="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + logoHTML(t.id, 44) + '</button>';
-    }).join('');
+    }).join(''));
     poolMotion();
   }
 
@@ -1126,11 +1177,12 @@
       for (var i = from; i < to; i++) out += slotCardHTML(sl, i, c[sl][i], edit, r);
       return out;
     }
-    $('slots-p30').innerHTML = slotsHTML('p30', 0, 2);
-    $('slots-p03').innerHTML = slotsHTML('p03', 0, 2);
-    $('slots-adv-l').innerHTML = slotsHTML('adv', 0, 3);
-    $('slots-adv-r').innerHTML = slotsHTML('adv', 3, 6);
-    boardMotion();
+    var before = boardRects(st, c);
+    setHTML($('slots-p30'), slotsHTML('p30', 0, 2));
+    setHTML($('slots-p03'), slotsHTML('p03', 0, 2));
+    setHTML($('slots-adv-l'), slotsHTML('adv', 0, 3));
+    setHTML($('slots-adv-r'), slotsHTML('adv', 3, 6));
+    boardMotion(before);
   }
 
   function gaugeSVG(p) {
@@ -1832,7 +1884,7 @@
       } else { txt = 'Дедлайн минув · lock ≈' + fmtTime(t.lockAt); cls += ' warn'; }
     } else txt = 'Картку закрито';
     pill.className = cls; pill.hidden = false;
-    pill.innerHTML = '<span class="pd" aria-hidden="true"></span>' + esc(txt);
+    setHTML(pill, '<span class="pd" aria-hidden="true"></span>' + esc(txt));
     $('stageSub').textContent = '8 найкращих зі Stage 3 · гра на виліт · чвертьфінали й півфінали Bo3, фінал Bo5. ' +
       'Три виклики Pick\'Em: вгадати щонайменше 2 чвертьфінали, щонайменше 1 півфінал і чемпіона.';
     var alerts = [];
@@ -2888,12 +2940,13 @@
     if (!lg.poll) lg.poll = setInterval(function () { if (state.view === 'league' && !document.hidden && lg.cur) lgLoad(lg.cur, true); }, 30000);
   }
   function openLeagueView() {
+    var again = state.view === 'league';            // вкладка вже відкрита — без повторної анімації появи
     state.view = 'league'; lsSet('view', 'league');
     closePicker();
     if (!lg.cur && lg.list.length) lg.cur = lg.list[0].id;
     if (!lg.stage) lg.stage = lgDefaultStage();
     render();
-    playEnter();
+    if (!again) playEnter();
     window.scrollTo({ top: 0 });
     if (lg.cur) lgLoad(lg.cur, !!lgData());
     lgStartTimers();
@@ -3069,8 +3122,9 @@
   }
   function lgClick(el, act) {
     if (el.dataset.lgst) {
+      var moved = el.dataset.lgst !== lg.stage;
       lg.stage = el.dataset.lgst; lg.open = null; requestLeague(); renderLeague();
-      [].forEach.call(document.querySelectorAll('#leagueView .lb'), function (t) { replay(t, 'swap-in'); });
+      if (moved) [].forEach.call(document.querySelectorAll('#leagueView .lb'), function (t) { replay(t, 'swap-in'); });
       return true;
     }
     if (el.dataset.lgrow && !act) { lg.open = lg.open === el.dataset.lgrow ? null : el.dataset.lgrow; keepFocus(renderLeague); return true; }
@@ -3361,7 +3415,7 @@
     var saved = lsGet('stage');
     state.stage = saved && (state.cfg.stages[saved] || saved === PO) ? saved : 'stage1';
     render();
-    if (state.view !== 'league') playEnter();
+    playEnter();
     return Promise.all([loadResults(false), loadInsights()]);
   }).then(function () {
     if (!lsGet('stage') && state.live) state.stage = defaultStage();
@@ -3375,6 +3429,7 @@
     else if (state.view === 'league') openLeagueView();
     if (pendingJoin) { var t = pendingJoin; pendingJoin = null; importToken(t); }
   }).catch(function (e) {
+    document.querySelector('.page').classList.remove('booting');
     $('alerts').innerHTML = '<div class="alert critical"><span class="ai">!</span><span>Не вдалося завантажити сторінку: ' + esc(e && e.message || e) + '</span></div>';
   });
 })();
