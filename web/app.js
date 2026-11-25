@@ -823,8 +823,12 @@
   // показано минулого разу (motion), і вішаємо одноразові класи. «Зменшити рух» у системі вимикає все.
   var motion = { slots: null, ctx: null, ids: null, fly: {}, used: null, usedCtx: null, poolFly: {}, gauge: null, gShown: null, countId: 0, dist: null, tabX: null, lgPts: {}, enterT: 0 };
   var G_C = 2 * Math.PI * 62, G_ARC = G_C * 0.75;
-  // Тривалість і крок затримки одноразових анімацій, мс (ті самі числа, що в style.css).
-  var ANIM = { pop: [420, 40], deal: [400, 35], move: [380, 0], 'fade-in': [350, 0], 'just-hit': [900, 0], 'just-dead': [450, 0], 'to-used': [400, 0], 'to-free': [400, 0] };
+  // Одноразові анімації: тривалість і крок «хвилі», мс, та назва @keyframes (ті самі, що в style.css).
+  var ANIM = {
+    pop: [420, 40, 'pop-in'], deal: [400, 35, 'deal-in'], move: [380, 0, 'move-from'], 'fade-in': [350, 0, 'fade-in'],
+    'just-hit': [900, 0, 'ring-out'], 'just-dead': [450, 0, 'shake'], 'to-used': [400, 0, 'to-used'], 'to-free': [400, 0, 'to-free'],
+    'swap-in': [350, 0, 'fade-in'], 'fold-in': [300, 0, 'fade-up'], bump: [400, 0, 'bump']
+  };
   function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
   /** Запускає одноразову анімацію класом cls; i — номер у «хвилі», ad — власна затримка в мс (може бути від'ємною). */
   function replay(el, cls, i, ad) {
@@ -832,10 +836,16 @@
     if (i != null) el.style.setProperty('--i', i);
     if (ad != null) el.style.setProperty('--ad', Math.round(ad) + 'ms'); else el.style.removeProperty('--ad');
     el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
-    el.addEventListener('animationend', function done(e) {
-      if (e.target !== el) return;
-      el.classList.remove(cls); el.removeEventListener('animationend', done);
-    });
+    // Клас знімаємо після кінця анімації, а ще й за таймером: якщо розділ сховали (інша вкладка), браузер обриває
+    // анімацію без animationend, і без таймера вона програлася б знову при поверненні.
+    var a = ANIM[cls] || [600, 0, ''], runs = el._runs || (el._runs = {}), run = runs[cls] = (runs[cls] || 0) + 1, tm;
+    function done(e) {
+      if (e && (e.target !== el || (a[2] && e.animationName !== a[2]))) return;
+      clearTimeout(tm); el.removeEventListener('animationend', done);
+      if (runs[cls] === run) el.classList.remove(cls);          // новіший запуск того ж класу не чіпаємо
+    }
+    tm = setTimeout(done, Math.max(0, (ad != null ? ad : (i || 0) * a[1]) + a[0]) + 150);
+    el.addEventListener('animationend', done);
   }
   /** Запис про анімацію, що йде: щоб продовжити її, якщо наступний рендер перебудує елемент. */
   function flight(cls, i, t, extra) {
@@ -864,11 +874,13 @@
 
   /** Плавна поява розділів сторінки — при відкритті, зміні стадії чи вкладки «Змагання». */
   function playEnter() {
-    var page = document.querySelector('.page');
-    page.classList.remove('booting');                // до першого рендера розділи приховані (без «блимання» заготовки)
-    if (reduced()) return;
+    var page = document.querySelector('.page'), boot = page.classList.contains('booting');
     var els = [].slice.call(document.querySelectorAll('.page > .stagehead, .page > .toolbar, #swissView > *, .page > #poView, .page > #leagueView'))
       .filter(function (e) { return !e.hidden && e.offsetParent !== null; });
+    // Повільне завантаження: запобіжник уже показав сторінку — тоді без повторної появи (інакше «блимне»).
+    var shown = boot && els.some(function (e) { return getComputedStyle(e).opacity !== '0'; });
+    page.classList.remove('booting');                // до першого показу розділи приховані (без «блимання» заготовки)
+    if (reduced() || shown) return;
     els.forEach(function (e, i) { e.style.setProperty('--i', Math.min(i, 8)); });
     page.classList.remove('enter'); void page.offsetWidth; page.classList.add('enter');
     clearTimeout(motion.enterT);
@@ -1017,6 +1029,7 @@
     $('swissView').hidden = po || lgv; $('poView').hidden = !po || lgv; $('leagueView').hidden = !lgv;
     document.querySelector('.stagehead').hidden = lgv; document.querySelector('.toolbar').hidden = lgv;
     renderTabs();
+    if (po || lgv) ['pool', 'slots-p30', 'slots-p03', 'slots-adv-l', 'slots-adv-r', 'gauge'].forEach(function (id) { $(id)._h = null; });
     if (lgv) { renderLeague(); return; }
     renderHead(); renderProfiles(); renderTools();
     if (po) { renderPlayoffs(); renderSaveState(); return; }
@@ -1438,7 +1451,7 @@
     pickerEl.hidden = false;
     pickerAnchor = anchor;
     // Відкриваємо з того боку від слота, де більше місця, і обмежуємо висоту, щоб не налазити на шапку.
-    var b = anchor.getBoundingClientRect(), pw = pickerEl.offsetWidth, ph = pickerEl.offsetHeight, top = 64;
+    var b = anchor.getBoundingClientRect(), pw = pickerEl.offsetWidth, ph = pickerEl.offsetHeight, top = headerBottom() + 8;
     var below = window.innerHeight - b.bottom - 16, above = b.top - top - 8, y;
     if (below >= Math.min(ph, 320) || below >= above) { y = b.bottom + 8; pickerEl.style.maxHeight = Math.max(160, below) + 'px'; }
     else { var h = Math.min(ph, above); y = Math.max(top, b.top - h - 8); pickerEl.style.maxHeight = Math.max(160, above) + 'px'; }
@@ -2745,6 +2758,11 @@
   function lgPicks(st, c) { c = normFor(st, c); return st === PO ? poPicks(c) : nPicks(c); }
   function lgTotal(st) { return st === PO ? 7 : 10; }
   /** Стадія за замовчуванням: та, що йде зараз, інакше найближча відкрита. */
+  /** Стадія таблиці ліги: поки результатів ще немає, вибір за замовчуванням тимчасовий і уточнюється пізніше. */
+  function lgStage() {
+    if (!lg.stage || lg.autoStage) { lg.stage = lgDefaultStage(); lg.autoStage = !state.live; }
+    return lg.stage;
+  }
   function lgDefaultStage() {
     var live = LG_STAGES.filter(function (st) {
       if (!lgClosed(st)) return false;
@@ -2766,7 +2784,7 @@
       lg.data[id] = d;
       var item = lg.list.filter(function (x) { return x.id === id; })[0];
       if (item && item.name !== d.name) { item.name = d.name; lgSaveList(); }
-      if (!lg.stage) lg.stage = lgDefaultStage();
+      lgStage();
       requestLeague();
       renderLeague();
       return d;
@@ -2944,7 +2962,7 @@
     state.view = 'league'; lsSet('view', 'league');
     closePicker();
     if (!lg.cur && lg.list.length) lg.cur = lg.list[0].id;
-    if (!lg.stage) lg.stage = lgDefaultStage();
+    lgStage();
     render();
     if (!again) playEnter();
     window.scrollTo({ top: 0 });
@@ -3077,7 +3095,7 @@
       el.innerHTML = '<section class="card lg-form"><h2>Змагання</h2><p class="hint">Ліга ще не підключена до онлайн-бази. Скоро запрацює.</p></section>';
       return;
     }
-    if (!lg.stage) lg.stage = lgDefaultStage();
+    lgStage();
     var html = '';
     if (lg.pending && !lgHas(lg.pending)) html = lgJoinHTML();
     else if (!lg.list.length || lg.creating) html = lgCreateHTML(!lg.list.length);
@@ -3123,7 +3141,7 @@
   function lgClick(el, act) {
     if (el.dataset.lgst) {
       var moved = el.dataset.lgst !== lg.stage;
-      lg.stage = el.dataset.lgst; lg.open = null; requestLeague(); renderLeague();
+      lg.stage = el.dataset.lgst; lg.autoStage = false; lg.open = null; requestLeague(); renderLeague();
       if (moved) [].forEach.call(document.querySelectorAll('#leagueView .lb'), function (t) { replay(t, 'swap-in'); });
       return true;
     }
@@ -3174,6 +3192,8 @@
 
   // ---------------------------------------------------- підказки і тости ---
   var tipEl = $('tip'), tipFor = null;
+  /** Низ липкої шапки (на телефоні вона у два рядки) — підказки й список команд не мають її перекривати. */
+  function headerBottom() { var h = document.querySelector('.appbar'); return h ? Math.round(h.getBoundingClientRect().bottom) : 56; }
   function showTip(el) {
     var text = el.getAttribute('data-tip');
     if (!text) return;
@@ -3181,7 +3201,7 @@
     var b = el.getBoundingClientRect(), tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
     var x = Math.min(Math.max(8, b.left + b.width / 2 - tw / 2), window.innerWidth - tw - 8);
     var y = b.top - th - 8;
-    if (y < 64) y = b.bottom + 8;
+    if (y < headerBottom() + 8) y = b.bottom + 8;
     tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px';
   }
   function hideTip() { tipFor = null; tipEl.hidden = true; }
@@ -3415,7 +3435,9 @@
     var saved = lsGet('stage');
     state.stage = saved && (state.cfg.stages[saved] || saved === PO) ? saved : 'stage1';
     render();
-    playEnter();
+    // Показуємо одразу, лише якщо вже знаємо, що показувати. Перший візит (стадію обере defaultStage),
+    // вкладка «Змагання» чи запрошення в лігу — чекаємо результатів, щоб сторінка не підмінилась за мить.
+    if (saved && state.view !== 'league' && !lgStartId) playEnter();
     return Promise.all([loadResults(false), loadInsights()]);
   }).then(function () {
     if (!lsGet('stage') && state.live) state.stage = defaultStage();
@@ -3427,6 +3449,7 @@
     STAGES.forEach(function (st) { if (st !== state.stage) requestInsights(st, false); });
     if (lgStartId) lgOpenInvite(lgStartId);
     else if (state.view === 'league') openLeagueView();
+    if (document.querySelector('.page').classList.contains('booting')) playEnter();
     if (pendingJoin) { var t = pendingJoin; pendingJoin = null; importToken(t); }
   }).catch(function (e) {
     document.querySelector('.page').classList.remove('booting');

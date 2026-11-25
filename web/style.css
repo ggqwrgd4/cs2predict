@@ -433,6 +433,7 @@ button, input { font: inherit; color: inherit; }
 }
 @media (max-width: 720px) {
   .page { padding: 20px 16px 8px; }
+  .tcard .st { font-size: 0; gap: 0; padding: 0 5px; }   /* вузька картка: лише ✓/✗, щоб не налазити на × */
   .slots { flex-wrap: wrap; justify-content: center; }
   .tcard { width: 104px; min-height: 150px; padding: 12px 6px 10px; }
   .tcard .lg { width: 54px; height: 54px; }
