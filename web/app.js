@@ -171,12 +171,22 @@
     if (lg && lg.light) {
       var dark = lg.dark || lg.light;
       return '<span class="logo img"><picture><source media="(prefers-color-scheme: dark)" srcset="web/logos/' + encodeURIComponent(dark) + '">' +
-        '<img src="web/logos/' + encodeURIComponent(lg.light) + '" alt="" loading="lazy" draggable="false"></picture></span>';
+        '<img src="web/logos/' + encodeURIComponent(lg.light) + '" alt="" loading="lazy" draggable="false" style="' + logoFit(lg.ar) + '"></picture></span>';
     }
     var s = TEAM_STYLE[id], tag = s ? s[1] : teamName(id).replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
     var color = s ? s[0] : '#64748b', k = tag.length <= 2 ? 0.38 : tag.length === 3 ? 0.31 : 0.25;
     return '<span class="logo' + (s && s[2] ? ' dark-text' : '') + '" style="background:' + color + ';font-size:' + Math.max(7, Math.round(sizePx * k)) + 'px">' + esc(tag) + '</span>';
   }
+  /** Розмір логотипа в колі за його пропорціями: кути картинки лишаються всередині кола,
+   *  широкі написи не впираються в край, квадратні емблеми не роздуваються. */
+  function logoBox(ar) {
+    ar = ar > 0 ? ar : 1;
+    var R = 0.43, h = 2 * R / Math.sqrt(1 + ar * ar), w = h * ar;
+    if (w > 0.8) { w = 0.8; h = w / ar; }
+    if (h > 0.68) { h = 0.68; w = h * ar; }
+    return { w: w, h: h };
+  }
+  function logoFit(ar) { var b = logoBox(ar); return 'width:' + (b.w * 100).toFixed(1) + '%;height:' + (b.h * 100).toFixed(1) + '%'; }
   function emptyCard() { return { p30: [], adv: [], p03: [] }; }
   function normCard(c) {
     var out = emptyCard(), seen = {};
@@ -808,6 +818,146 @@
       if (n && !n.disabled && n.offsetParent !== null) { n.focus({ preventScroll: true }); return; }
     }
   }
+  // ------------------------------------------------------------ анімації ---
+  // Сторінка перемальовується через innerHTML, тож анімуємо лише ЗМІНИ: порівнюємо з тим, що було
+  // показано минулого разу (motion), і вішаємо одноразові класи. «Зменшити рух» у системі вимикає все.
+  var motion = { slots: null, ctx: null, used: null, usedCtx: null, gauge: null, gShown: null, countId: 0, dist: null, tabX: null, lgPts: {}, enterT: 0 };
+  var G_C = 2 * Math.PI * 62, G_ARC = G_C * 0.75;
+  function reduced() { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  function replay(el, cls, i) {
+    if (!el || reduced()) return;
+    if (i != null) el.style.setProperty('--i', i);
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    el.addEventListener('animationend', function done(e) {
+      if (e.target !== el) return;
+      el.classList.remove(cls); el.removeEventListener('animationend', done);
+    });
+  }
+  /** innerHTML лише якщо розмітка справді змінилась — щоб не перезапускати анімації без потреби. */
+  function setHTML(el, html) { if (el._h === html) return false; el._h = html; el.innerHTML = html; return true; }
+  function isBusy(el) { return !!(el && !el.hidden && el.querySelector('.busy')); }
+
+  /** Плавна поява розділів сторінки — при відкритті, зміні стадії чи вкладки «Змагання». */
+  function playEnter() {
+    if (reduced()) return;
+    var page = document.querySelector('.page');
+    var els = [].slice.call(document.querySelectorAll('.page > .stagehead, .page > .toolbar, #swissView > *, .page > #poView, .page > #leagueView'))
+      .filter(function (e) { return !e.hidden && e.offsetParent !== null; });
+    els.forEach(function (e, i) { e.style.setProperty('--i', Math.min(i, 8)); });
+    page.classList.remove('enter'); void page.offsetWidth; page.classList.add('enter');
+    clearTimeout(motion.enterT);
+    motion.enterT = setTimeout(function () { page.classList.remove('enter'); }, 1100);
+  }
+
+  /** Слоти картки: нова команда «вискакує», інший профіль — картки «роздаються», зайшов/згорів — спалах. */
+  function boardMotion() {
+    var st = state.stage, ctx = st + '|' + state.profile, prev = motion.slots, now = {}, k = 0;
+    var same = !!prev && motion.ctx === ctx, deal = !!prev && !same && !!motion.ctx && motion.ctx.split('|')[0] === st;
+    [].forEach.call(document.querySelectorAll('#board .tcard[data-slot]'), function (el) {
+      var key = el.getAttribute('data-slot') + el.getAttribute('data-i'), id = el.getAttribute('data-team') || '';
+      var s = el.classList.contains('hit') ? 'hit' : el.classList.contains('dead') ? 'dead' : 'open', p = (prev && prev[key] || '|').split('|');
+      now[key] = id + '|' + s;
+      if (!id) { if (same && p[0]) replay(el, 'fade-in'); return; }
+      if (deal) replay(el, 'deal', k++);
+      else if (same && p[0] !== id) replay(el, 'pop', k++);
+      else if (same && p[1] !== s && s !== 'open') replay(el, s === 'hit' ? 'just-hit' : 'just-dead');
+    });
+    motion.slots = now; motion.ctx = ctx;
+  }
+  /** Ряд команд: значок команди, яку щойно поставили в картку, плавно тьмяніє (і навпаки). */
+  function poolMotion() {
+    var ctx = state.stage + '|' + state.profile, prev = motion.usedCtx === ctx ? motion.used : null, now = {};
+    [].forEach.call(document.querySelectorAll('#pool .pchip'), function (el) {
+      var id = el.getAttribute('data-team'), u = el.classList.contains('used');
+      now[id] = u;
+      if (prev && id in prev && prev[id] !== u) replay(el.querySelector('.logo'), u ? 'to-used' : 'to-free');
+    });
+    motion.used = now; motion.usedCtx = ctx;
+  }
+  /** Кільце шансу заповнюється від попереднього значення (або від нуля), число «докручується». */
+  function gaugeMotion(p, n, ctx) {
+    var g = motion.gauge;
+    motion.gauge = { p: p, n: n, ctx: ctx };
+    if (reduced() || !g || g.ctx !== ctx && p == null) return;
+    if (p == null) { if (n !== g.n) replay(document.querySelector('#gauge .g-num'), 'bump'); return; }
+    var from = g.ctx === ctx && g.p != null ? (motion.gShown != null ? motion.gShown : g.p) : 0;
+    if (from === p) return;
+    var arc = document.querySelector('#gauge .g-val');
+    if (arc) {
+      var to = arc.getAttribute('stroke-dasharray');
+      arc.style.transition = 'none';
+      arc.style.strokeDasharray = Math.max(0.1, from * G_ARC).toFixed(1) + ' ' + G_C.toFixed(1);
+      arc.getBoundingClientRect();
+      arc.style.transition = '';
+      requestAnimationFrame(function () { arc.style.strokeDasharray = to; });
+    }
+    var id = ++motion.countId, t0 = 0, dur = 750;
+    function fmt(v) { return v > 0 && v < 0.001 ? '<0.1%' : (v * 100).toFixed(1) + '%'; }
+    function step(t) {
+      if (id !== motion.countId) return;
+      if (!t0) t0 = t;
+      var k = Math.min(1, (t - t0) / dur), v = k < 1 ? from + (p - from) * (1 - Math.pow(1 - k, 3)) : p;
+      var num = document.querySelector('#gauge .g-num');
+      if (num) num.textContent = fmt(v);
+      motion.gShown = k < 1 ? v : null;
+      if (k < 1) requestAnimationFrame(step);
+    }
+    var n0 = document.querySelector('#gauge .g-num');
+    if (n0) n0.textContent = fmt(from);
+    requestAnimationFrame(step);
+  }
+  /** Стовпчики розподілу ростуть від попередньої висоти (або від нуля, хвилею). */
+  function distMotion(oldH, ctx) {
+    var same = motion.dist === ctx && oldH && oldH.length;
+    motion.dist = ctx;
+    if (reduced()) return;
+    [].forEach.call(document.querySelectorAll('#dcols .dbar'), function (b, i) {
+      var to = b.style.height, from = same ? oldH[i] || '0px' : '0px';
+      if (from === to) return;
+      b.style.transition = 'none'; b.style.height = from; b.getBoundingClientRect();
+      b.style.transition = ''; b.style.transitionDelay = same ? '' : i * 30 + 'ms';
+      b.style.height = to;
+    });
+  }
+  /** «Повзунок» під вибраною вкладкою їде до нової. */
+  function tabThumb(animate) {
+    var nav = $('tabs'), on = nav.querySelector('[aria-selected="true"]'), th = nav.querySelector('.seg-thumb');
+    if (!on || !on.offsetWidth) { if (th) th.remove(); nav.classList.remove('has-thumb'); motion.tabX = null; return; }
+    if (!th) { th = document.createElement('span'); th.className = 'seg-thumb'; th.setAttribute('aria-hidden', 'true'); nav.insertBefore(th, nav.firstChild); }
+    var x = on.offsetLeft, w = on.offsetWidth, last = motion.tabX;
+    nav.classList.add('has-thumb');
+    th.style.transition = 'none';
+    if (animate && last && !reduced() && (last.x !== x || last.w !== w)) {
+      th.style.transform = 'translateX(' + last.x + 'px)'; th.style.width = last.w + 'px';
+      th.getBoundingClientRect(); th.style.transition = '';
+      th.style.transform = 'translateX(' + x + 'px)'; th.style.width = w + 'px';
+    } else {
+      th.style.transform = 'translateX(' + x + 'px)'; th.style.width = w + 'px';
+      th.getBoundingClientRect(); th.style.transition = '';
+    }
+    motion.tabX = { x: x, w: w };
+  }
+  /** Ліга: очки гравця підстрибують, коли зростають. */
+  function lgMotion() {
+    var key = lg.cur + '|' + lg.stage, prev = motion.lgPts[key], now = {};
+    [].forEach.call(document.querySelectorAll('#leagueView tr.row[data-lgrow]'), function (tr) {
+      var pt = tr.querySelector('.pts');
+      if (!pt) return;
+      var uid = tr.getAttribute('data-lgrow'), v = +pt.textContent;
+      now[uid] = v;
+      if (prev && uid in prev && v > prev[uid]) replay(pt, 'bump');
+    });
+    motion.lgPts[key] = now;
+  }
+  window.addEventListener('resize', function () { tabThumb(false); });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { tabThumb(false); });
+  // Розгортання блоків «Шанси всіх команд», «Матчі»…: вміст плавно з'являється.
+  document.addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (!d || d.tagName !== 'DETAILS' || !d.open) return;
+    [].forEach.call(d.children, function (c) { if (c.tagName !== 'SUMMARY') replay(c, 'fold-in'); });
+  }, true);
+
   function render() { keepFocus(renderAll); }
   function renderAll() {
     if (!state.stage || !state.cfg) return;
@@ -818,8 +968,10 @@
     if (lgv) { renderLeague(); return; }
     renderHead(); renderProfiles(); renderTools();
     if (po) { renderPlayoffs(); renderSaveState(); return; }
+    var swap = ['rec', 'next', 'aiCard', 'expCard'], was = swap.map(function (id) { return isBusy($(id)); });
     renderPool(); renderBoard(); renderGauge(); renderDist();
     renderSaveState(); renderRec(); renderNext(); /* renderSim(); — симулятор стадії поки в архіві */ renderInsights(); renderTeamsTable(); renderMatches();
+    swap.forEach(function (id, i) { var el = $(id); if (was[i] && el && !el.hidden && !isBusy(el)) replay(el, 'swap-in'); });
   }
 
   var lastTabs = '';
@@ -841,6 +993,7 @@
     if (html === lastTabs) return;                 // без змін — не чіпаємо (і не збиваємо фокус)
     lastTabs = html;
     $('tabs').innerHTML = html;
+    tabThumb(true);
   }
 
   function renderBanner() {
@@ -946,6 +1099,7 @@
       return '<button class="pchip' + (used ? ' used' : '') + '" data-team="' + esc(t.id) + '"' + (edit ? ' draggable="true"' : '') +
         ' data-tip="' + esc(tip) + '" aria-label="' + esc(tip) + '">' + logoHTML(t.id, 44) + '</button>';
     }).join('');
+    poolMotion();
   }
 
   function slotCardHTML(sl, i, id, edit, r) {
@@ -975,6 +1129,7 @@
     $('slots-p03').innerHTML = slotsHTML('p03', 0, 2);
     $('slots-adv-l').innerHTML = slotsHTML('adv', 0, 3);
     $('slots-adv-r').innerHTML = slotsHTML('adv', 3, 6);
+    boardMotion();
   }
 
   function gaugeSVG(p) {
@@ -988,15 +1143,16 @@
 
   function renderGauge() {
     var st = state.stage, c = cardOf(st), r = state.res[st], el = $('gauge');
+    var gctx = st + '|' + state.profile;
     if (!complete(c)) {
       var n = nPicks(c);
       el.className = 'gauge';
-      el.innerHTML = gaugeSVG(0) + '<div class="g-num">' + n + '/10</div><div class="g-lab">' + (n ? 'обери ще ' + (10 - n) : 'обери 10 команд') + '</div>';
+      if (setHTML(el, gaugeSVG(0) + '<div class="g-num">' + n + '/10</div><div class="g-lab">' + (n ? 'обери ще ' + (10 - n) : 'обери 10 команд') + '</div>')) gaugeMotion(null, n, gctx);
       return;
     }
     var fresh = r && r.tag === cardKey(c) && r.picks && r.picks.length === 10, R = fresh ? r : state.lastGood[st];
     el.className = 'gauge' + (fresh ? '' : ' is-stale');
-    if (!R) { el.innerHTML = gaugeSVG(0) + '<div class="g-num">…</div><div class="g-lab">рахую</div>'; return; }
+    if (!R) { if (setHTML(el, gaugeSVG(0) + '<div class="g-num">…</div><div class="g-lab">рахую</div>')) gaugeMotion(null, 10, gctx); return; }
     var html = gaugeSVG(R.p5) + '<div class="g-num" data-tip="' + esc(fmtPct1(R.p5) + ' ± ' + (1.96 * R.p5se * 100).toFixed(1) + ' п.п. — шум ' +
       R.sims.toLocaleString('uk-UA') + ' симуляцій; сама модель помиляється більше. У середньому зайде ' + R.eK.toFixed(1) + ' з 10.') + '">' +
       (R.p5 > 0 && R.p5 < 0.001 ? '<0.1%' : (R.p5 * 100).toFixed(1) + '%') + '</div><div class="g-lab">шанс 5+' + (wiActive() ? ' · що як' : '') + '</div>';
@@ -1006,7 +1162,7 @@
       html += '<div class="g-live"><span class="good" data-tip="Уже зайшло">' + ICON.check + '<i class="sr">зайшло </i>' + cnt.hit + '</span><span class="bad" data-tip="Уже згоріло">' + ICON.x + '<i class="sr">згоріло </i>' + cnt.dead +
         '</span><span data-tip="Ще в грі">у грі ' + cnt.open + '</span></div>';
     }
-    el.innerHTML = html;
+    if (setHTML(el, html)) gaugeMotion(R.p5, 10, gctx);
   }
 
   function renderDist() {
@@ -1014,7 +1170,7 @@
     var fresh = r && complete(c) && r.tag === cardKey(c) && r.hist && r.hist.length === 11, R = fresh ? r : complete(c) ? state.lastGood[st] : null;
     if (!R) {
       el.className = 'dcols';
-      el.innerHTML = '<div class="dempty">' + (complete(c) ? 'Рахую…' : 'Розподіл з\'явиться, коли в картці буде 10 команд') + '</div>';
+      setHTML(el, '<div class="dempty">' + (complete(c) ? 'Рахую…' : 'Розподіл з\'явиться, коли в картці буде 10 команд') + '</div>');
       return;
     }
     el.className = 'dcols' + (fresh ? '' : ' is-stale');
@@ -1029,8 +1185,9 @@
         '<div class="dbox"><div class="dv">' + dv(v, k) + '</div><div class="dbar" style="height:' + h + 'px"></div></div>' +
         '<div class="dk">' + k + '/10</div></div>';
     }
-    el.innerHTML = html + '<table class="sr"><caption>Скільки піків вгадаєш</caption>' +
-      R.hist.map(function (v, k) { return '<tr><td>' + k + ' з 10</td><td>' + dv(v, k) + '</td></tr>'; }).join('') + '</table>';
+    var oldH = [].map.call(el.querySelectorAll('.dbar'), function (b) { return b.style.height; });
+    if (setHTML(el, html + '<table class="sr"><caption>Скільки піків вгадаєш</caption>' +
+      R.hist.map(function (v, k) { return '<tr><td>' + k + ' з 10</td><td>' + dv(v, k) + '</td></tr>'; }).join('') + '</table>')) distMotion(oldH, st + '|' + state.profile);
   }
 
   function saveText(st, pid) {
@@ -1993,7 +2150,7 @@
     if (status) { x.lineWidth = 2; x.strokeStyle = status === 'hit' ? C.green[0] : C.red[0]; x.stroke(); }
     var R = Math.round(h * 0.34), cx = X + 14 + R, cy = Y + h / 2, im = imgs[id];
     x.beginPath(); x.arc(cx, cy, R, 0, Math.PI * 2);
-    if (im) { x.fillStyle = C.logo; x.fill(); var s2 = R * 2 * 0.74, k = Math.min(s2 / im.width, s2 / im.height); x.drawImage(im, cx - im.width * k / 2, cy - im.height * k / 2, im.width * k, im.height * k); }
+    if (im) { x.fillStyle = C.logo; x.fill(); var bx = logoBox(im.width / im.height), k = Math.min(R * 2 * bx.w / im.width, R * 2 * bx.h / im.height); x.drawImage(im, cx - im.width * k / 2, cy - im.height * k / 2, im.width * k, im.height * k); }
     else {
       var ts = TEAM_STYLE[id], tag = ts ? ts[1] : teamName(id).replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
       x.fillStyle = ts ? ts[0] : '#64748b'; x.fill();
@@ -2735,6 +2892,7 @@
     if (!lg.cur && lg.list.length) lg.cur = lg.list[0].id;
     if (!lg.stage) lg.stage = lgDefaultStage();
     render();
+    playEnter();
     window.scrollTo({ top: 0 });
     if (lg.cur) lgLoad(lg.cur, !!lgData());
     lgStartTimers();
@@ -2891,6 +3049,7 @@
       }
     }
     el.innerHTML = html;
+    lgMotion();
   }
 
   function lgSubmit(form) {
@@ -2908,7 +3067,11 @@
     }
   }
   function lgClick(el, act) {
-    if (el.dataset.lgst) { lg.stage = el.dataset.lgst; lg.open = null; requestLeague(); renderLeague(); return true; }
+    if (el.dataset.lgst) {
+      lg.stage = el.dataset.lgst; lg.open = null; requestLeague(); renderLeague();
+      [].forEach.call(document.querySelectorAll('#leagueView .lb'), function (t) { replay(t, 'swap-in'); });
+      return true;
+    }
     if (el.dataset.lgrow && !act) { lg.open = lg.open === el.dataset.lgrow ? null : el.dataset.lgrow; keepFocus(renderLeague); return true; }
     switch (act) {
       case 'lg-copy': lgCopyLink(); return true;
@@ -2936,11 +3099,12 @@
   function switchStage(st) {
     var fromLeague = state.view === 'league';
     if (fromLeague) { state.view = null; lsSet('view', ''); }
-    if (st === state.stage) { if (fromLeague) { render(); window.scrollTo({ top: 0 }); } return; }
+    if (st === state.stage) { if (fromLeague) { render(); playEnter(); window.scrollTo({ top: 0 }); } return; }
     state.stage = st; lsSet('stage', st); state.leagueOpen = null; requestLeague();
     state.showVariants = false; state.showAllRoot = false;
     closePicker();
     render();
+    playEnter();
     if (st === PO) {
       if (!state.po || state.poStale || state.po.meta !== state.profile || state.po.tag !== poKey(poNorm(poCard()))) requestPlayoffs();
       return;
@@ -3196,6 +3360,7 @@
     var saved = lsGet('stage');
     state.stage = saved && (state.cfg.stages[saved] || saved === PO) ? saved : 'stage1';
     render();
+    if (state.view !== 'league') playEnter();
     return Promise.all([loadResults(false), loadInsights()]);
   }).then(function () {
     if (!lsGet('stage') && state.live) state.stage = defaultStage();

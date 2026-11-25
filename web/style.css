@@ -411,6 +411,21 @@ button, input { font: inherit; color: inherit; }
   .appbar-in { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
   .seg { order: 3; width: 100%; overflow-x: auto; }
 }
+/* телефон: усі вкладки в один рядок без прокрутки */
+@media (max-width: 560px) {
+  .seg { display: flex; scrollbar-width: none; }
+  .seg::-webkit-scrollbar { display: none; }
+  .seg button { flex: 1 1 auto; justify-content: center; padding: 0 5px; gap: 5px; font-size: 12.5px; }
+}
+@media (max-width: 560px) {
+  .tools { flex-wrap: wrap; width: 100%; }
+  .tools .tbtn { flex: 1 1 auto; justify-content: center; padding: 0 12px; }
+}
+@media (max-width: 400px) {
+  .seg .lgtab svg { display: none; }
+  .seg button { padding: 0 3px; gap: 4px; font-size: 12px; }
+  .seg .d { width: 5px; height: 5px; }
+}
 @media (max-width: 720px) {
   .page { padding: 20px 16px 8px; }
   .slots { flex-wrap: wrap; justify-content: center; }
@@ -423,9 +438,10 @@ button, input { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 @media (prefers-color-scheme: dark) { .logo { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); } }
 /* справжні логотипи (web/logos/): прозорий PNG у світлому колі */
-.logo.img { background: #fff; box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08); overflow: hidden; }
+.logo.img { position: relative; background: #fff; box-shadow: inset 0 0 0 1px rgba(15, 23, 42, .08); overflow: hidden; }
 .logo.img picture { display: contents; }
-.logo.img img { width: 72%; height: 72%; object-fit: contain; display: block; margin: auto; }
+/* розмір задає logoFit() у app.js за пропорціями логотипа; абсолютне позиціювання — щоб Safari рахував відсотки від кола */
+.logo.img img { position: absolute; left: 50%; top: 50%; width: 59%; height: 59%; transform: translate(-50%, -50%); object-fit: contain; display: block; max-width: none; }
 @media (prefers-color-scheme: dark) { .logo.img { background: #262b33; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); } }
 
 /* ------------------------------------------------------------ «що як» --- */
@@ -704,3 +720,56 @@ details.sub > :not(summary) { margin-top: 8px; }
 .lb .score .pts { display: inline-grid; place-items: center; min-width: 28px; height: 26px; padding: 0 6px; border-radius: 8px; background: var(--accent-wash); color: var(--ink); font-weight: 800; font-size: 15px; }
 .lb .ready { display: inline-flex; align-items: center; gap: 5px; color: var(--good-text); font-weight: 600; }
 .lb .ready svg { width: 14px; height: 14px; }
+
+/* ---------- анімації (запускає app.js лише на зміни; «Зменшити рух» у системі вимикає все) ---------- */
+@keyframes fade-up { from { opacity: 0; transform: translateY(12px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes pop-in { from { opacity: 0; transform: scale(.72); } }
+@keyframes deal-in { from { opacity: 0; transform: translateY(10px) rotate(-2deg) scale(.95); } }
+@keyframes bump { 40% { transform: scale(1.22); } }
+@keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+@keyframes ring-out { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 65%, transparent); opacity: 1; }
+  to { box-shadow: 0 0 0 18px color-mix(in srgb, var(--good) 0%, transparent); opacity: 0; } }
+@keyframes to-used { from { opacity: 1; transform: scale(1.15); } }
+@keyframes to-free { from { opacity: .28; transform: scale(.82); } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }
+@keyframes picker-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } }
+@keyframes live-ring { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--good) 55%, transparent); } to { box-shadow: 0 0 0 6px color-mix(in srgb, var(--good) 0%, transparent); } }
+
+/* поява сторінки та розділів по черзі */
+.page.enter > .stagehead, .page.enter > .toolbar, .page.enter #swissView > *, .page.enter > #poView, .page.enter > #leagueView {
+  animation: fade-up .45s cubic-bezier(.2, .7, .2, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.swap-in, .fade-in { animation: fade-in .35s ease-out; }
+.fold-in { animation: fade-up .3s cubic-bezier(.2, .7, .2, 1); }
+
+/* картки в слотах */
+.tcard.pop { animation: pop-in .42s cubic-bezier(.2, .9, .3, 1.35) both; animation-delay: calc(var(--i, 0) * 40ms); }
+.tcard.deal { animation: deal-in .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
+.tcard.just-dead { animation: shake .45s ease-in-out; }
+.tcard.just-hit::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; animation: ring-out .9s ease-out; }
+.tcard.just-hit .st { animation: pop-in .45s cubic-bezier(.2, .9, .3, 1.35); }
+.tcard:not(.ro):active { transform: scale(.97); }
+.logo.to-used { animation: to-used .4s ease-out; }
+.logo.to-free { animation: to-free .4s ease-out; }
+
+/* кільце шансу і стовпчики розподілу */
+.gauge .g-val { transition: stroke-dasharray .75s cubic-bezier(.2, .7, .2, 1); }
+.gauge .g-num.bump, .lb .score .pts.bump { animation: bump .4s ease-out; }
+.dbar { transition: height .6s cubic-bezier(.2, .7, .2, 1); }
+
+/* вкладки: повзунок під вибраною */
+.seg { position: relative; }
+.seg button { position: relative; z-index: 1; transition: color .2s; }
+.seg-thumb { position: absolute; top: 3px; bottom: 3px; left: 0; width: 0; border-radius: 8px; background: var(--surface); pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .08), 0 0 0 1px var(--line); transition: transform .32s cubic-bezier(.3, .7, .2, 1), width .32s cubic-bezier(.3, .7, .2, 1); }
+.seg.has-thumb > button[aria-selected="true"] { background: transparent; box-shadow: none; }
+.seg .d.live, .pill.live .pd { animation: live-ring 1.8s ease-out infinite; }
+
+/* кнопки відгукуються на натискання */
+.tbtn, .btn, .prof { transition: background-color .15s, border-color .15s, color .15s, transform .1s; }
+.tbtn:active, .btn:active:not(:disabled), .prof:active, .seg button:active { transform: scale(.97); }
+
+/* вікна та випадний список */
+.modal-back:not([hidden]) { animation: fade-in .18s ease-out; }
+.modal-back:not([hidden]) > .modal { animation: modal-in .24s cubic-bezier(.2, .8, .2, 1); }
+.picker:not([hidden]) { animation: picker-in .16s ease-out; }
