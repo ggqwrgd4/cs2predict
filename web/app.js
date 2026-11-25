@@ -876,11 +876,12 @@
   }
   /** Кільце шансу заповнюється від попереднього значення (або від нуля), число «докручується». */
   function gaugeMotion(p, n, ctx) {
-    var g = motion.gauge;
+    var g = motion.gauge, shown = motion.gShown;
     motion.gauge = { p: p, n: n, ctx: ctx };
-    if (reduced() || !g || g.ctx !== ctx && p == null) return;
-    if (p == null) { if (n !== g.n) replay(document.querySelector('#gauge .g-num'), 'bump'); return; }
-    var from = g.ctx === ctx && g.p != null ? (motion.gShown != null ? motion.gShown : g.p) : 0;
+    motion.countId++; motion.gShown = null;          // зупиняємо попереднє «докручування» числа
+    if (reduced() || !g) return;
+    if (p == null) { if (g.ctx === ctx && n !== g.n) replay(document.querySelector('#gauge .g-num'), 'bump'); return; }
+    var from = g.ctx === ctx && g.p != null ? (shown != null ? shown : g.p) : 0;
     if (from === p) return;
     var arc = document.querySelector('#gauge .g-val');
     if (arc) {
@@ -891,7 +892,7 @@
       arc.style.transition = '';
       requestAnimationFrame(function () { arc.style.strokeDasharray = to; });
     }
-    var id = ++motion.countId, t0 = 0, dur = 750;
+    var id = motion.countId, t0 = 0, dur = 750;
     function fmt(v) { return v > 0 && v < 0.001 ? '<0.1%' : (v * 100).toFixed(1) + '%'; }
     function step(t) {
       if (id !== motion.countId) return;
