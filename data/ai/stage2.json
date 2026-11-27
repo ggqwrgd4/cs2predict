@@ -1,0 +1,143 @@
+{
+ "stage": "stage2",
+ "generatedAt": "2026-11-27T19:20:56+02:00",
+ "summary": "Перевірено всі 16 команд Stage 2: нових замін, візових проблем чи хвороб не знайдено (стендіни FUT і Astralis уже враховано вручну). Є лише дрібні поправки форми за листопадовими турнірами: The MongolZ, NAVI і 100 Thieves трохи сильніші, G2, NIP і Eternal Fire трохи слабші.",
+ "covered": [
+  "fut",
+  "nemiga",
+  "g2",
+  "1w",
+  "navi",
+  "astralis",
+  "mongolz",
+  "mibr",
+  "fq",
+  "nip",
+  "tl",
+  "ef",
+  "pvision",
+  "imp",
+  "lvg",
+  "100t"
+ ],
+ "adjustments": [
+  {
+   "team": "mongolz",
+   "factor": "form",
+   "delta": 0.05,
+   "confidence": 0.6,
+   "summary": "На IEM Beijing 2026 (початок листопада) The MongolZ, тоді 15-ті у світі, дійшли до фіналу, по дорозі обігравши NAVI 2:0.",
+   "evidence": [
+    {
+     "url": "https://www.dust2.us/matches/2400008/the-mongolz-vs-natus-vincere",
+     "quote": "The MongolZ was ranked 15 in the world at the time going up against Natus Vincere who was ranked 10 in the world.",
+     "date": "2026-11-07"
+    }
+   ]
+  },
+  {
+   "team": "navi",
+   "factor": "form",
+   "delta": 0.03,
+   "confidence": 0.5,
+   "summary": "NAVI на IEM Beijing 2026 обіграли вищі за рейтингом команди (зокрема BetBoom 2:0) і дійшли до півфіналу — трохи краще за свій рейтинг.",
+   "evidence": [
+    {
+     "url": "https://www.dust2.us/matches/2400010/the-mongolz-vs-natus-vincere",
+     "quote": "Natus Vincere was ranked 10 in the world at the time going up against BETBOOM who was ranked 7 in the world.",
+     "date": "2026-11-07"
+    }
+   ]
+  },
+  {
+   "team": "g2",
+   "factor": "form",
+   "delta": -0.02,
+   "confidence": 0.5,
+   "summary": "G2 після 2 листопада виграли лише одну серію з п'яти: рано вилетіли з IEM Beijing і програли 1:2 Spirit та Falcons на BLAST Rivals.",
+   "evidence": [
+    {
+     "url": "https://www.dust2.us/matches/2400205/g2-vs-falcons",
+     "quote": "G2 was ranked 12 in the world at the time going up against Falcons who was ranked 6 in the world.",
+     "date": "2026-11-13"
+    }
+   ]
+  },
+  {
+   "team": "100t",
+   "factor": "form",
+   "delta": 0.04,
+   "confidence": 0.7,
+   "summary": "100 Thieves 15–17 листопада без жодної програної серії пройшли закриту кваліфікацію PGL Cluj-Napoca 2027, обігравши Eternal Fire, PARIVISION і fnatic.",
+   "evidence": [
+    {
+     "url": "https://www.dust2.us/news/80012/100-thieves-qualify-for-pgl-cluj-napoca-2027-with-wins-over-parivision-fnatic",
+     "quote": "100 Thieves went undefeated in their run to the main event, defeating Eternal Fire, PARIVISION, and fnatic all by scores of 2-1.",
+     "date": "2026-11-17"
+    },
+    {
+     "url": "https://www.dust2.us/news/80012/100-thieves-qualify-for-pgl-cluj-napoca-2027-with-wins-over-parivision-fnatic",
+     "quote": "100 Thieves went 3-0 in the PGL qualifier.",
+     "date": "2026-11-17"
+    }
+   ]
+  },
+  {
+   "team": "nip",
+   "factor": "form",
+   "delta": -0.02,
+   "confidence": 0.5,
+   "summary": "NIP на онлайн-турнірі Stake Ranked Episode 6 (18–19 листопада) програли нижчим за рейтингом Luminosity 0:2 і BIG 1:2 та вилетіли.",
+   "evidence": [
+    {
+     "url": "https://www.dust2.us/news/80061/luminosity-sweep-nip-move-on-to-stake-ranked-episode-6-upper-final",
+     "quote": "Luminosity sweep NIP, move on to Stake Ranked Episode 6 upper final",
+     "date": "2026-11-18"
+    },
+    {
+     "url": "https://www.dust2.us/matches/2400443/ninjas-in-pyjamas-vs-luminosity",
+     "quote": "Ninjas in Pyjamas was ranked 18 in the world at the time going up against Luminosity who was ranked 36 in the world.",
+     "date": "2026-11-18"
+    }
+   ]
+  },
+  {
+   "team": "ef",
+   "factor": "form",
+   "delta": -0.02,
+   "confidence": 0.5,
+   "summary": "Eternal Fire не пройшли кваліфікацію PGL Cluj-Napoca 2027: програли 100 Thieves 1:2 і нижчим за рейтингом magic 0:2.",
+   "evidence": [
+    {
+     "url": "https://www.dust2.us/matches/2400419/magic-vs-eternal-fire",
+     "quote": "magic was ranked 29 in the world at the time going up against Eternal Fire who was ranked 23 in the world.",
+     "date": "2026-11-16"
+    },
+    {
+     "url": "https://www.dust2.us/news/80012/100-thieves-qualify-for-pgl-cluj-napoca-2027-with-wins-over-parivision-fnatic",
+     "quote": "EF came back on the second map, winning their own choice of Cache 13-10.",
+     "date": "2026-11-17"
+    }
+   ]
+  }
+ ],
+ "ownCard": {
+  "p30": [
+   "fut",
+   "nemiga"
+  ],
+  "adv": [
+   "g2",
+   "navi",
+   "1w",
+   "mongolz",
+   "pvision",
+   "nip"
+  ],
+  "p03": [
+   "lvg",
+   "fq"
+  ]
+ },
+ "ownCardNote": "Картка складена за таблицею шансів моделі: FUT і Nemiga мають найбільші шанси на 3:0, Lynn Vision і FlyQuest — на 0:3, решта шість — найвищі шанси на 3:1/3:2. Від оптимальної відрізняється лише тим, що The MongolZ і Nemiga помінялися місцями між 3:0 і 3:1/3:2 (шанс 5+ 29.8% проти 30.8%): свіжа форма MongolZ уже врахована в цифрах, окремої причини ставити їх на 3:0 новини не дають."
+}
