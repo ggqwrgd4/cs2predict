@@ -785,3 +785,26 @@ details.sub > :not(summary) { margin-top: 8px; }
 .modal-back:not([hidden]) { animation: fade-in .18s ease-out; }
 .modal-back:not([hidden]) > .modal { animation: modal-in .24s cubic-bezier(.2, .8, .2, 1); }
 .picker:not([hidden]) { animation: picker-in .16s ease-out; }
+
+/* ---------- «Хто вгадує найкраще» ---------- */
+.seer-btn { margin: -4px 0 10px; }
+.seer-btn svg { width: 15px; height: 15px; }
+.seers { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.seer { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; background: var(--surface); }
+.seer.ai { border-color: var(--accent); }
+.seer-h { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto 28px; align-items: center; gap: 8px; }
+.seer .rk { font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; text-align: center; }
+.seer .nm { font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.seer .nm small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); }
+.seer .sps { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.seer .sp { font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--surface-2); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.seer .sp.ok { background: var(--good-wash); color: var(--ink); }
+.seer .sp.miss { color: var(--muted); }
+.seer .sp.none { opacity: .55; }
+.seer .tot { font-weight: 800; font-size: 17px; text-align: right; font-variant-numeric: tabular-nums; }
+.seer details.sub { margin-top: 6px; }
+.seer .rec { margin: 4px 0 0 32px; }
+@media (max-width: 560px) {
+  .seer-h { grid-template-columns: 20px minmax(0, 1fr) 24px; }
+  .seer .sps { grid-column: 2 / 4; grid-row: 2; justify-content: flex-start; }
+}

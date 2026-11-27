@@ -1780,7 +1780,9 @@
   function renderExperts() {
     var st = state.stage, el = $('expCard'), f = insFile(st, 'analysts'), x = state.ins[st], name = stageCfg(st).name, c = cardOf(st), boards = boardsOf(st);
     var head = '<div class="ins-h"><div class="label">Експерти</div>' + (boards ? switchHTML('exp', state.flags.exp, 'враховувати (15%)',
-      'Коли ввімкнено, думка експертів зсуває силу команд на 15% від різниці з моделлю') : '') + '</div>';
+      'Коли ввімкнено, думка експертів зсуває силу команд на 15% від різниці з моделлю') : '') + '</div>' +
+      (anyBoards() ? '<button class="btn sm seer-btn" data-act="seers" data-tip="Рейтинг експертів: скільки їхніх піків уже зайшло на цьому мейджорі, і їхні картки">' +
+        ICON.users + 'Хто вгадує найкраще</button>' : '');
     if (f && f.error) { el.innerHTML = head + '<p class="fine">Файл data/analysts/' + st + '.json не читається: ' + esc(f.error) + '</p>'; return; }
     if (!boards) {
       el.innerHTML = head + '<p class="ins-empty">Прогнозів експертів для ' + esc(name) + ' ще немає.</p>' +
@@ -1845,6 +1847,71 @@
     }).join('') + '</ul></details>';
     if (s.problems.length) html += '<p class="fine">Пропущено: ' + esc(s.problems.join('; ')) + '.</p>';
     el.innerHTML = html;
+  }
+
+  // ------------------------------------------------ хто вгадує найкраще ---
+  // Загального списку власників діамантових монет ніде немає, тож рейтинг — лише з експертів, чиї картки ми зібрали:
+  // скільки їхніх піків уже зайшло на стадіях цього мейджора. 5+ з 10 — виклик стадії пройдено (крок до діаманта).
+  function anyBoards() { return STAGES.some(function (st) { return !!boardsOf(st); }); }
+  function seerRows() {
+    var who = {}, list = [];
+    function add(key, name, group, st, card, extra) {
+      var x = who[key];
+      if (!x) { x = who[key] = { name: name, group: group, stages: {}, total: 0, passed: 0, scored: 0, ai: !!(extra && extra.ai), record: '' }; list.push(x); }
+      var p = progress(st), R = p.done > 0 ? realRecords(st) : null, n = nPicks(card), hit = 0, dead = 0;
+      if (R) SLOT_KEYS.forEach(function (sl) { card[sl].forEach(function (id) { var s = realStatus(R, id, sl); if (s === 'hit') hit++; else if (s === 'dead') dead++; }); });
+      x.stages[st] = { card: card, n: n, hit: hit, open: n - hit - dead, started: !!R, done: p.done === 33, url: extra && extra.url };
+      if (R) { x.total += hit; x.scored++; if (hit >= 5) x.passed++; }
+      if (extra && extra.record) x.record = extra.record;
+    }
+    STAGES.forEach(function (st) {
+      (boardsOf(st) || []).forEach(function (b) {
+        var name = String(b.analyst || '').trim();
+        if (name) add('e:' + name.toLowerCase(), name, String(b.group || name), st, normCard(b), { url: b.sourceUrl, record: b.record ? String(b.record) : '' });
+      });
+      var ai = aiFileOf(st);
+      if (ai && ai.ownCard) add('ai', 'AI', 'наш аналіз (картка наосліп)', st, normCard(ai.ownCard), { ai: true });
+    });
+    list.sort(function (a, b) { return (b.total - a.total) || (b.passed - a.passed) || (b.scored - a.scored) || a.name.localeCompare(b.name); });
+    return list;
+  }
+  function seersModal() {
+    var rows = seerRows(), st = state.stage === PO ? null : state.stage, sts = STAGES.filter(function (s) { return rows.some(function (x) { return x.stages[s]; }); });
+    var prev = null, pos = 0;
+    var body = rows.map(function (x, i) {
+      var key = x.total + '|' + x.passed;
+      if (x.scored && key !== prev) { pos = i + 1; prev = key; }
+      var pills = sts.map(function (s) {
+        var z = x.stages[s], nm = stageCfg(s).name, tip, txt, cls = 'sp';
+        if (!z) return '<span class="sp none" data-tip="' + esc(nm + ': картки немає') + '">' + esc(nm.replace('Stage ', 'S')) + ' —</span>';
+        if (!z.started) { txt = 'картка є'; tip = nm + ' ще не почалась'; }
+        else {
+          txt = z.hit + '/' + z.n + (z.hit >= 5 ? ' ✓' : '');
+          tip = nm + ': зайшло ' + z.hit + ' з ' + z.n + (z.done ? '' : ', ще в грі ' + z.open) + (z.hit >= 5 ? ' · виклик пройдено' : '');
+          if (z.hit >= 5) cls += ' ok'; else if (z.done || z.hit + z.open < 5) cls += ' miss';
+        }
+        return '<span class="' + cls + '" data-tip="' + esc(tip) + '">' + esc(nm.replace('Stage ', 'S')) + ' ' + esc(txt) + '</span>';
+      }).join('');
+      var cur = st && x.stages[st], card = '';
+      if (cur && cur.n) {
+        var R = cur.started ? realRecords(st) : null;
+        card = '<details class="sub"><summary>Картка ' + esc(stageCfg(st).name) + (cur.n < 10 ? ' (неповна, ' + cur.n + ' ' + plural(cur.n, 'пік', 'піки', 'піків') + ')' : '') + '</summary>' +
+          chipsHTML(cur.card, null, function (id, sl) { if (!R) return null; var s = realStatus(R, id, sl); return s === 'open' ? null : s; }) +
+          (cur.url && /^https:\/\//.test(cur.url) ? '<p class="fine"><a href="' + esc(cur.url) + '" target="_blank" rel="noopener noreferrer">джерело</a></p>' : '') + '</details>';
+      }
+      return '<li class="seer' + (x.ai ? ' ai' : '') + '"><div class="seer-h"><span class="rk">' + (x.scored ? pos : '') + '</span>' +
+        '<span class="nm">' + esc(x.name) + (x.group && x.group !== x.name ? '<small>' + esc(x.group) + '</small>' : '') + '</span>' +
+        '<span class="sps">' + pills + '</span><span class="tot" data-tip="Скільки піків зайшло разом на всіх зіграних стадіях">' + (x.scored ? x.total : '') + '</span></div>' +
+        (x.record ? '<p class="fine rec">«' + esc(x.record) + '»</p>' : '') + card + '</li>';
+    }).join('');
+    var scored = rows.filter(function (x) { return x.scored; }), best = scored.length ? scored[0] : null;
+    var anyPassed = scored.some(function (x) { return x.passed; });
+    var lead = scored.length ? (anyPassed ? '' : '<p class="fine">Поки що жоден експерт не набрав 5 з 10 на зіграних стадіях — мейджор непередбачуваний для всіх.</p>') : '<p class="fine">Жодна стадія з картками експертів ще не почалась — рейтинг з\'явиться після перших матчів.</p>';
+    openModal('<h3>Хто вгадує найкраще</h3><p>Скільки піків зайшло в картках експертів на цьому мейджорі. <b>5 з 10</b> — виклик стадії пройдено (саме за виклики дають діамантову монету). ' +
+      'У списку лише ті, чиї картки ми зібрали' + (st ? '; натисни «Картка ' + esc(stageCfg(st).name) + '», щоб побачити їхні піки' : '') + '.</p>' + lead +
+      '<ol class="seers">' + body + '</ol>' +
+      '<p class="fine">Експертів з однієї студії (наприклад, таланти PGL) показано окремо, хоча в шансах вони мають один спільний голос.</p>' +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-cancel">Закрити</button></div>', null, 'wide');
   }
 
   function renderInsights() {
@@ -3270,6 +3337,7 @@
     if (act === 'apply-ins') return applyInsight(el.dataset.which);
     if (act === 'apply-po') { var PB = poBracket(); if (PB && PB.best) applyCard(PO, PB.best.card, 'Картку плей-оф застосовано'); return; }
     if (act === 'share') return shareModal();
+    if (act === 'seers') return seersModal();
     if (el.dataset.lrow && !act) { state.leagueOpen = state.leagueOpen === el.dataset.lrow ? null : el.dataset.lrow; return keepFocus(renderFriends); }
     if (act === 'friends') return showFriends();
     if (act === 'invite') { closeModal(); return inviteModal(); }
