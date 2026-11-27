@@ -1,0 +1,63 @@
+{
+ "stage": "stage2",
+ "collectedAt": "2026-11-27T19:27:16+02:00",
+ "note": "Pick'Em на Stage 2 відкрився лише 27.11 ввечері, тож особистих карток гравців і кастерів ще немає. Картку TalkEsport видно лише в пошуку (сторінка не відкрилась) — взято тільки 3:0 і 0:3. Strafe не враховано: на сторінці були інструкції для AI-помічників.",
+ "boards": [
+  {
+   "analyst": "Pley (Frost)",
+   "group": "Pley (Frost)",
+   "sourceUrl": "https://pley.gg/cs2/major-pickem-stage-2/",
+   "publishedAt": "2026-11-27",
+   "p30": [
+    "mongolz",
+    "navi"
+   ],
+   "adv": [
+    "fut",
+    "nemiga",
+    "1w",
+    "nip",
+    "ef",
+    "fq"
+   ],
+   "p03": [
+    "lvg",
+    "100t"
+   ]
+  },
+  {
+   "analyst": "Luz (luzraposa)",
+   "group": "Luz (luzraposa)",
+   "sourceUrl": "https://luzraposa.com/projects/major-supercomputer/singapore-2026/",
+   "p30": [
+    "fut",
+    "navi"
+   ],
+   "adv": [
+    "mongolz",
+    "g2",
+    "nemiga",
+    "pvision",
+    "mibr",
+    "astralis"
+   ],
+   "p03": [
+    "imp",
+    "lvg"
+   ]
+  },
+  {
+   "analyst": "TalkEsport",
+   "group": "TalkEsport",
+   "p30": [
+    "navi",
+    "mongolz"
+   ],
+   "adv": [],
+   "p03": [
+    "fq",
+    "lvg"
+   ]
+  }
+ ]
+}
