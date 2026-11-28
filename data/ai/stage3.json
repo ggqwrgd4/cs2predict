@@ -1,0 +1,20 @@
+{
+  "stage": "stage3",
+  "generatedAt": "2026-11-28T13:33:57+02:00",
+  "summary": "Склад Stage 3 ще не відомий (Stage 2 триває), тому переглянуто лише 8 запрошених команд. Підтверджено дві речі: FURIA виграла BLAST Rivals Season 2 у Гонконзі (3:0 у фіналі проти Spirit), а MOUZ розгромила The MongolZ 3:0 на IEM Beijing. Обом дано невелику поправку за форму. Нових стендінів, проблем із візами чи хвороб не знайдено; стендіни Vitality та Legacy вже враховані вручну.",
+  "covered": ["mouz", "vit", "furia", "aurora", "spirit", "bb team", "falcons", "legacy"],
+  "adjustments": [
+    {"team": "furia", "factor": "form", "delta": 0.05, "confidence": 0.8,
+     "summary": "FURIA виграла BLAST Rivals Season 2 (15.11), у фіналі розгромила Spirit 3:0 — свіжа чемпіонська форма на поточному патчі.",
+     "evidence": [
+       {"url": "https://www.dust2.us/news/79958/fallen-and-furia-take-home-the-trophy-at-the-penultimate-event-of-his-career", "quote": "FURIA won BLAST Rivals Season 2 in Hong Kong", "date": "2026-11-15"},
+       {"url": "https://www.dust2.us/news/79958/fallen-and-furia-take-home-the-trophy-at-the-penultimate-event-of-his-career", "quote": "The grand final was a quick one as FURIA bested Spirit 3-0.", "date": "2026-11-15"}
+     ]},
+    {"team": "mouz", "factor": "form", "delta": 0.04, "confidence": 0.7,
+     "summary": "MOUZ 8.11 на IEM Beijing перемогла The MongolZ 3:0 (Bo5) — сильна форма після рейтингу 2 листопада.",
+     "evidence": [
+       {"url": "https://www.dust2.us/matches/2400011/the-mongolz-vs-mouz", "quote": "The CS2 match between The MongolZ and MOUZ is a part of IEM Beijing 2026 and was played November 8, 2026 02:30AM", "date": "2026-11-08"},
+       {"url": "https://www.dust2.us/matches/2400011/the-mongolz-vs-mouz", "quote": "The MongolZ 0 - 3 MOUZ", "date": "2026-11-08"}
+     ]}
+  ]
+}
